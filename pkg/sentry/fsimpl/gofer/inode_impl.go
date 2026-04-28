@@ -447,7 +447,7 @@ func (i *inode) allocate(ctx context.Context, mode, offset, length uint64) error
 	case *lisafsInode:
 		return it.writeFDLisa.Allocate(ctx, mode, offset, length)
 	case *directfsInode:
-		return unix.Fallocate(int(i.writeFD.RacyLoad()), uint32(mode), int64(offset), int64(length))
+		return fallocateFile(int(i.writeFD.RacyLoad()), uint32(mode), int64(offset), int64(length))
 	default:
 		panic("unknown inode implementation")
 	}

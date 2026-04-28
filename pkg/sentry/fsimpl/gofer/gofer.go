@@ -827,8 +827,8 @@ func inoKeyFromStatx(stat *lisafs.Statx) inoKey {
 func inoKeyFromStat(stat *unix.Stat_t) inoKey {
 	return inoKey{
 		ino:      stat.Ino,
-		devMinor: unix.Minor(stat.Dev),
-		devMajor: unix.Major(stat.Dev),
+		devMinor: goferStatDevMinor(stat.Dev),
+		devMajor: goferStatDevMajor(stat.Dev),
 	}
 }
 
@@ -1207,15 +1207,14 @@ func (d *dentry) refreshSizeLocked(ctx context.Context) error {
 		return d.inode.updateMetadataLocked(ctx, noHandle)
 	}
 
-	// Using statx(2) with a minimal mask is faster than fstat(2).
-	var stat unix.Statx_t
+	// Get just the file size efficiently.
 	// Can use RacyLoad() because handleMu is locked.
-	err := unix.Statx(int(d.inode.writeFD.RacyLoad()), "", unix.AT_EMPTY_PATH, unix.STATX_SIZE, &stat)
+	size, err := statxSizeFast(int(d.inode.writeFD.RacyLoad()))
 	d.inode.handleMu.RUnlock() // must be released before updateSizeLocked()
 	if err != nil {
 		return err
 	}
-	d.inode.updateSizeLocked(stat.Size)
+	d.inode.updateSizeLocked(size)
 	return nil
 }
 
@@ -2025,7 +2024,7 @@ func (d *dentry) ensureSharedHandle(ctx context.Context, read, write, trunc bool
 				// make the old file descriptor refer to the new file
 				// description, then close the new file descriptor (which is no
 				// longer needed).
-				if err := unix.Dup3(int(h.fd), int(d.inode.readFD.RacyLoad()), unix.O_CLOEXEC); err != nil {
+				if err := dupFD(int(h.fd), int(d.inode.readFD.RacyLoad()), unix.O_CLOEXEC); err != nil {
 					oldFD := d.inode.readFD.RacyLoad()
 					d.inode.handleMu.Unlock()
 					ctx.Warningf("gofer.dentry.ensureSharedHandle: failed to dup fd %d to fd %d: %v", h.fd, oldFD, err)

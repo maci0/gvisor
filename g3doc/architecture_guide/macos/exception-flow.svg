@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 400" font-family="Arial, Helvetica, sans-serif" font-size="12">
+  <!-- Title -->
+  <text x="240" y="22" text-anchor="middle" font-size="14" font-weight="bold" fill="#333">Exception Handling Flow</text>
+
+  <!-- Guest Code -->
+  <rect x="160" y="40" width="160" height="36" rx="4" fill="#fce5cd" stroke="#e69138" stroke-width="1.5"/>
+  <text x="240" y="63" text-anchor="middle" font-weight="bold" fill="#783f04">Guest Code (EL1)</text>
+
+  <!-- Arrow down -->
+  <line x1="240" y1="76" x2="240" y2="95" stroke="#333" stroke-width="1.5" marker-end="url(#arrowDown)"/>
+  <text x="325" y="90" font-size="10" fill="#666">SVC #0 or fault</text>
+
+  <!-- Exception Vectors -->
+  <rect x="160" y="95" width="160" height="44" rx="4" fill="#d9d2e9" stroke="#8e7cc3" stroke-width="1.5"/>
+  <text x="240" y="113" text-anchor="middle" font-weight="bold" fill="#351c75">Exception Vectors</text>
+  <text x="240" y="130" text-anchor="middle" font-size="10" fill="#674ea7">IPA 0x000-0x800</text>
+
+  <!-- Arrow down -->
+  <line x1="240" y1="139" x2="240" y2="158" stroke="#333" stroke-width="1.5" marker-end="url(#arrowDown)"/>
+  <text x="320" y="153" font-size="10" fill="#666">HVC #N</text>
+
+  <!-- Hypervisor.framework -->
+  <rect x="140" y="158" width="200" height="44" rx="4" fill="#f4cccc" stroke="#cc4125" stroke-width="1.5"/>
+  <text x="240" y="176" text-anchor="middle" font-weight="bold" fill="#990000">Hypervisor.framework</text>
+  <text x="240" y="193" text-anchor="middle" font-size="10" fill="#cc4125">HV_EXIT_REASON_EXCEPTION</text>
+
+  <!-- Arrow down -->
+  <line x1="240" y1="202" x2="240" y2="220" stroke="#333" stroke-width="1.5" marker-end="url(#arrowDown)"/>
+
+  <!-- context.Switch -->
+  <rect x="130" y="220" width="220" height="36" rx="4" fill="#cfe2f3" stroke="#6d9eeb" stroke-width="1.5"/>
+  <text x="240" y="238" text-anchor="middle" font-weight="bold" fill="#1155cc">context.Switch()</text>
+  <text x="240" y="252" text-anchor="middle" font-size="10" fill="#3c78d8">Read ESR_EL1 exception class</text>
+
+  <!-- Branch arrows -->
+  <!-- Syscall (left) -->
+  <line x1="175" y1="256" x2="80" y2="290" stroke="#38761d" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+  <rect x="15" y="290" width="130" height="50" rx="4" fill="#d9ead3" stroke="#6aa84f" stroke-width="1"/>
+  <text x="80" y="308" text-anchor="middle" font-weight="bold" font-size="11" fill="#274e13">EC=0x15 (SVC)</text>
+  <text x="80" y="325" text-anchor="middle" font-size="10" fill="#38761d">Syscall → sentry</text>
+
+  <!-- Data Abort (center) -->
+  <line x1="240" y1="256" x2="240" y2="290" stroke="#e69138" stroke-width="1.5" marker-end="url(#arrowOrange)"/>
+  <rect x="170" y="290" width="140" height="50" rx="4" fill="#fff2cc" stroke="#f1c232" stroke-width="1"/>
+  <text x="240" y="308" text-anchor="middle" font-weight="bold" font-size="11" fill="#7f6000">EC=0x24/25</text>
+  <text x="240" y="325" text-anchor="middle" font-size="10" fill="#bf9000">Fault → MapFile</text>
+
+  <!-- Canceled (right) -->
+  <line x1="305" y1="256" x2="400" y2="290" stroke="#cc4125" stroke-width="1.5" marker-end="url(#arrowRed)"/>
+  <rect x="335" y="290" width="130" height="50" rx="4" fill="#f4cccc" stroke="#cc4125" stroke-width="1"/>
+  <text x="400" y="308" text-anchor="middle" font-weight="bold" font-size="11" fill="#990000">Canceled</text>
+  <text x="400" y="325" text-anchor="middle" font-size="10" fill="#cc4125">Interrupt → retry</text>
+
+  <!-- Sigreturn trampoline note -->
+  <rect x="15" y="355" width="450" height="35" rx="4" fill="#efefef" stroke="#ccc" stroke-width="1"/>
+  <text x="240" y="372" text-anchor="middle" font-size="11" fill="#333">
+    <tspan font-weight="bold">Sigreturn trampoline</tspan> at IPA 0x804: MOV X8, #139; SVC #0 (rt_sigreturn)
+  </text>
+
+  <!-- Arrow markers -->
+  <defs>
+    <marker id="arrowDown" markerWidth="8" markerHeight="6" refX="4" refY="6" orient="auto">
+      <path d="M0,0 L4,6 L8,0 Z" fill="#333"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="8" markerHeight="6" refX="4" refY="6" orient="auto">
+      <path d="M0,0 L4,6 L8,0 Z" fill="#38761d"/>
+    </marker>
+    <marker id="arrowOrange" markerWidth="8" markerHeight="6" refX="4" refY="6" orient="auto">
+      <path d="M0,0 L4,6 L8,0 Z" fill="#e69138"/>
+    </marker>
+    <marker id="arrowRed" markerWidth="8" markerHeight="6" refX="4" refY="6" orient="auto">
+      <path d="M0,0 L4,6 L8,0 Z" fill="#cc4125"/>
+    </marker>
+  </defs>
+</svg>

@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"time"
 
-	"golang.org/x/sys/unix"
 	"gvisor.dev/gvisor/pkg/abi/linux"
 	"gvisor.dev/gvisor/pkg/atomicbitops"
 	"gvisor.dev/gvisor/pkg/context"
@@ -419,23 +418,23 @@ func (to *SendReceiveTimeout) SendTimeout() int64 {
 // given family.
 func UnmarshalSockAddr(family int, data []byte) linux.SockAddr {
 	switch family {
-	case unix.AF_INET:
+	case linux.AF_INET:
 		var addr linux.SockAddrInet
 		addr.UnmarshalUnsafe(data)
 		return &addr
-	case unix.AF_INET6:
+	case linux.AF_INET6:
 		var addr linux.SockAddrInet6
 		addr.UnmarshalUnsafe(data)
 		return &addr
-	case unix.AF_UNIX:
+	case linux.AF_UNIX:
 		var addr linux.SockAddrUnix
 		addr.UnmarshalUnsafe(data)
 		return &addr
-	case unix.AF_NETLINK:
+	case linux.AF_NETLINK:
 		var addr linux.SockAddrNetlink
 		addr.UnmarshalUnsafe(data)
 		return &addr
-	case unix.AF_PACKET:
+	case linux.AF_PACKET:
 		var addr linux.SockAddrLink
 		addr.UnmarshalUnsafe(data)
 		return &addr

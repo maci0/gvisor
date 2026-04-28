@@ -189,7 +189,7 @@ func (c *Connection) handleMsg(comm Communicator, m MID, payloadLen uint32) (ret
 			// Wrap in an EREMOTEIO error; we don't really have a better way to
 			// describe this kind of error. EREMOTEIO is appropriate for a generic
 			// failed RPC message.
-			retM, retPayloadLen, retFDs = c.respondError(comm, unix.EREMOTEIO)
+			retM, retPayloadLen, retFDs = c.respondError(comm, errREMOTEIO)
 		}
 	}()
 

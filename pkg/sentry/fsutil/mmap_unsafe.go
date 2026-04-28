@@ -21,7 +21,5 @@ import (
 )
 
 func unsafeBlockFromMapping(addr uintptr, size int) safemem.Block {
-	// We don't control the host file's length, so touching its mappings may
-	// raise SIGBUS. Thus accesses to it must use safecopy.
 	return safemem.BlockFromUnsafePointer((unsafe.Pointer)(addr), size)
 }

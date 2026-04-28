@@ -9,7 +9,9 @@ go_library(
     name = "fdnotifier",
     srcs = [
         "fdnotifier.go",
+        "fdnotifier_darwin.go",
         "poll_unsafe.go",
+        "poll_unsafe_darwin.go",
     ],
     visibility = ["//:sandbox"],
     deps = [

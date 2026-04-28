@@ -190,7 +190,7 @@ func (s *Socket) enterFD() (int, bool) {
 // SocketPair creates a pair of connected sockets.
 func SocketPair(packet bool) (*Socket, *Socket, error) {
 	// Make a new pair.
-	fds, err := unix.Socketpair(unix.AF_UNIX, socketType(packet)|unix.SOCK_CLOEXEC, 0)
+	fds, err := socketPairFDs(packet)
 	if err != nil {
 		return nil, nil, err
 	}

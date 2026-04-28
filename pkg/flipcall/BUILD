@@ -10,9 +10,12 @@ go_library(
         "ctrl_futex.go",
         "flipcall.go",
         "flipcall_unsafe.go",
+        "futex_darwin.go",
         "futex_linux.go",
         "io.go",
         "packet_window.go",
+        "packet_window_seals_darwin.go",
+        "packet_window_seals_linux.go",
     ],
     visibility = ["//visibility:public"],
     deps = [

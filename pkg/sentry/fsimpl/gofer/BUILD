@@ -69,6 +69,9 @@ go_library(
     srcs = [
         "dentry_list.go",
         "directfs_inode.go",
+        "directfs_inode_stubs_darwin.go",
+        "gofer_compat_darwin.go",
+        "gofer_compat_linux.go",
         "directory.go",
         "filesystem.go",
         "fstree.go",

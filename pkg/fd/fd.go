@@ -211,7 +211,7 @@ func NewFromFiles(files []*os.File) ([]*FD, error) {
 
 // Open is equivalent to open(2).
 func Open(path string, openmode int, perm uint32) (*FD, error) {
-	f, err := unix.Open(path, openmode|unix.O_LARGEFILE, perm)
+	f, err := unix.Open(path, openmode|openExtraFlags, perm)
 	if err != nil {
 		return nil, err
 	}

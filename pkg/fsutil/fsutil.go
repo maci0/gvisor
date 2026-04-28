@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build linux
+// +build linux
+
 // Package fsutil contains filesystem utilities that can be shared between the
 // sentry and other sandbox components.
 package fsutil

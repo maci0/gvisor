@@ -180,6 +180,11 @@ type VDSO struct {
 // PrepareVDSO validates the system VDSO and returns a VDSO, containing the
 // param page for updating by the kernel.
 func PrepareVDSO(mf *pgalloc.MemoryFile) (*VDSO, error) {
+	if len(vdsodata.Binary) == 0 {
+		log.Warningf("VDSO binary is empty, skipping VDSO loading")
+		return prepareEmptyVDSO(mf)
+	}
+
 	vdsoFile := &byteFullReader{data: vdsodata.Binary}
 
 	// First make sure the VDSO is valid. vdsoFile does not use ctx, so a
@@ -231,6 +236,23 @@ func PrepareVDSO(mf *pgalloc.MemoryFile) (*VDSO, error) {
 	}, nil
 }
 
+// prepareEmptyVDSO creates a minimal VDSO with only a param page.
+// This is used on platforms where the VDSO binary is not available (e.g., macOS).
+func prepareEmptyVDSO(mf *pgalloc.MemoryFile) (*VDSO, error) {
+	// Allocate a param page (required by the kernel for VDSO parameters).
+	paramPage, err := mf.Allocate(hostarch.PageSize, pgalloc.AllocOpts{Kind: usage.System})
+	if err != nil {
+		return nil, fmt.Errorf("unable to allocate VDSO param page: %v", err)
+	}
+
+	return &VDSO{
+		ParamPage: mm.NewSpecialMappable("[vvar]", mf, paramPage),
+		vdso:      nil,
+		os:        abi.Linux,
+		arch:      arch.Host,
+	}, nil
+}
+
 // loadVDSO loads the VDSO into m.
 //
 // VDSOs are special.
@@ -246,6 +268,23 @@ func PrepareVDSO(mf *pgalloc.MemoryFile) (*VDSO, error) {
 //
 // loadVDSO takes a reference on the VDSO and parameter page FrameRegions.
 func loadVDSO(ctx context.Context, m *mm.MemoryManager, v *VDSO, bin loadedELF) (hostarch.Addr, error) {
+	if v.vdso == nil {
+		// No VDSO binary available (e.g., macOS). Just map the param page.
+		addr, err := m.MMap(ctx, memmap.MMapOpts{
+			Length:          v.ParamPage.Length(),
+			MappingIdentity: v.ParamPage,
+			Mappable:        v.ParamPage,
+			Private:         true,
+			Perms:           hostarch.Read,
+			MaxPerms:        hostarch.Read,
+		})
+		if err != nil {
+			ctx.Infof("Unable to map VDSO param page: %v", err)
+			return 0, err
+		}
+		return addr, nil
+	}
+
 	if v.os != bin.os {
 		ctx.Warningf("Binary ELF OS %v and VDSO ELF OS %v differ", bin.os, v.os)
 		return 0, linuxerr.ENOEXEC
@@ -364,10 +403,15 @@ func loadVDSO(ctx context.Context, m *mm.MemoryManager, v *VDSO, bin loadedELF) 
 // Release drops references on mappings held by v.
 func (v *VDSO) Release(ctx context.Context) {
 	v.ParamPage.DecRef(ctx)
-	v.vdso.DecRef(ctx)
+	if v.vdso != nil {
+		v.vdso.DecRef(ctx)
+	}
 }
 
 var vdsoSigreturnOffset = func() uint64 {
+	if len(vdsodata.Binary) == 0 {
+		return 0
+	}
 	f, err := elf.NewFile(bytes.NewReader(vdsodata.Binary))
 	if err != nil {
 		panic(fmt.Sprintf("failed to parse vdso.so as ELF file: %v", err))

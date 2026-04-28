@@ -54,65 +54,6 @@ runsc restore --image-path=<path> <container id>
 > Note: All top-level runsc flags needed when calling run must be provided to
 > `restore`.
 
-## Optimizations
-
-gVisor supports several performance optimizations during checkpoint and restore.
-These can be configured via flags provided to the `runsc checkpoint` and `runsc
-restore` commands.
-
-### Compression
-
-By providing the `--compression` flag to `runsc checkpoint`, users can specify
-the compression level of the generated snapshot files. Supported values are
-`none` and `flate-best-speed` (default). Note that `--compression=none` consumes
-less CPU and is faster. Furthermore, several other optimizations described below
-require `--compression=none`.
-
-### Exclude Committed Zero Pages
-
-By providing the `--exclude-committed-zero-pages` flag to `runsc checkpoint`,
-gVisor skips saving memory pages that are committed but contain only zeros. This
-can significantly reduce the checkpoint size for applications that have large,
-zero-filled memory regions (like LLMs), thereby speeding up restore. However, it
-may increase checkpoint duration, as it requires scanning all committed pages to
-determine if they are zero-filled.
-
-### Direct I/O
-
-By providing the `--direct` flag to `runsc checkpoint` or `runsc restore`,
-gVisor uses `O_DIRECT` when writing or reading the pages file. This bypasses the
-host page cache. This optimization requires `--compression=none` during
-checkpoint. This is only supported on filesystems that support direct I/O.
-
-This is particularly advantageous when the snapshot is being read for the first
-time from disk and will not be restored on the same machine again, making
-caching in the host page cache undesirable.
-
-### Background Restore
-
-By providing the `--background` flag to `runsc restore`, the application can
-start execution as soon as the kernel state is loaded. The remaining application
-memory and file data are restored asynchronously in the background while the
-application is running. This optimization requires `--compression=none` during
-checkpoint.
-
-If the application accesses a memory page that has not yet been restored, gVisor
-prioritizes loading that page immediately to unblock the application thread.
-This can dramatically reduce the "Time to First Instruction" for large
-applications.
-
-Note that when this is enabled, the sandbox may continue to have an open FD on
-the snapshot files even after the sandboxed application has started. This means
-that until the sandbox has fully restored (async page loading has completed):
-
--   Deleting the pages file may not free disk space immediately on POSIX
-    filesystems.
--   Deleting the pages file may not be possible on non-POSIX filesystems.
--   The mount containing the snapshot files cannot be unmounted.
-
-You can use `runsc wait --restore` to wait for restore to complete fully, after
-which you can clean up the `--image-path` directory if necessary.
-
 ## How to use checkpoint/restore in Docker:
 
 Run a container:

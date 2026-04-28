@@ -24,7 +24,6 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"sync"
 
 	"golang.org/x/sys/unix"
@@ -79,17 +78,10 @@ type Config struct {
 	EGID int
 }
 
-var procSelfFD *rwfd.FD
-
-// OpenProcSelfFD opens the /proc/self/fd directory, which will be used to
-// reopen file descriptors.
-func OpenProcSelfFD(path string) error {
-	d, err := unix.Open(path, unix.O_RDONLY|unix.O_DIRECTORY, 0)
-	if err != nil {
-		return fmt.Errorf("error opening /proc/self/fd: %v", err)
-	}
-	procSelfFD = rwfd.New(d)
-	return nil
+// OpenProcSelfFD initializes platform-specific FD reopening mechanisms.
+// On Linux, this opens /proc/self/fd. On macOS, this is a no-op.
+func OpenProcSelfFD(_ string) error {
+	return initProcSelfFD()
 }
 
 // LisafsServer implements lisafs.ServerImpl for fsgofer.
@@ -253,7 +245,7 @@ func (fd *controlFDLisa) getWritableFD() (int, error) {
 		return int(writableFD), nil
 	}
 
-	writableFD, err := unix.Openat(int(procSelfFD.FD()), strconv.Itoa(fd.hostFD), (unix.O_WRONLY|openFlags)&^unix.O_NOFOLLOW, 0)
+	writableFD, err := reopenFD(fd.hostFD, (unix.O_WRONLY|openFlags)&^unix.O_NOFOLLOW)
 	if err != nil {
 		return -1, err
 	}
@@ -271,7 +263,7 @@ func (fd *controlFDLisa) getParentFD() (int, string, error) {
 		log.Warningf("getParentFD() call on the root")
 		return -1, "", unix.EINVAL
 	}
-	parent, err := unix.Open(path.Dir(filePath), openFlags|unix.O_PATH, 0)
+	parent, err := openParentDir(path.Dir(filePath))
 	return parent, path.Base(filePath), err
 }
 
@@ -303,12 +295,12 @@ func (fd *controlFDLisa) Stat() (lisafs.Statx, error) {
 
 // SetStat implements lisafs.ControlFDImpl.SetStat.
 func (fd *controlFDLisa) SetStat(stat lisafs.SetStatReq) (failureMask uint32, failureErr error) {
-	if stat.Mask&unix.STATX_MODE != 0 {
+	if stat.Mask&_STATX_MODE != 0 {
 		switch fd.FileType() {
 		case unix.S_IFLNK:
 			// Linux does not support changing the mode of symlinks. See
 			// fs/attr.c:notify_change().
-			failureMask |= unix.STATX_MODE
+			failureMask |= _STATX_MODE
 			failureErr = unix.EOPNOTSUPP
 		case unix.S_IFSOCK:
 			// Sockets use O_PATH host FDs. However, fchmod(2) fails with EBADF for
@@ -320,19 +312,19 @@ func (fd *controlFDLisa) SetStat(stat lisafs.SetStatReq) (failureMask uint32, fa
 			}
 			if err != nil {
 				log.Warningf("SetStat fchmod failed on socket %q, err: %v", fd.Node().FilePath(), err)
-				failureMask |= unix.STATX_MODE
+				failureMask |= _STATX_MODE
 				failureErr = err
 			}
 		default:
 			if err := unix.Fchmod(fd.hostFD, stat.Mode&^unix.S_IFMT); err != nil {
 				log.Warningf("SetStat fchmod failed %q, err: %v", fd.Node().FilePath(), err)
-				failureMask |= unix.STATX_MODE
+				failureMask |= _STATX_MODE
 				failureErr = err
 			}
 		}
 	}
 
-	if stat.Mask&unix.STATX_SIZE != 0 {
+	if stat.Mask&_STATX_SIZE != 0 {
 		// ftruncate(2) requires the FD to be open for writing.
 		writableFD, err := fd.getWritableFD()
 		if err == nil {
@@ -340,21 +332,21 @@ func (fd *controlFDLisa) SetStat(stat lisafs.SetStatReq) (failureMask uint32, fa
 		}
 		if err != nil {
 			log.Warningf("SetStat ftruncate failed %q, err: %v", fd.Node().FilePath(), err)
-			failureMask |= unix.STATX_SIZE
+			failureMask |= _STATX_SIZE
 			failureErr = err
 		}
 	}
 
-	if stat.Mask&(unix.STATX_ATIME|unix.STATX_MTIME) != 0 {
+	if stat.Mask&(_STATX_ATIME|_STATX_MTIME) != 0 {
 		utimes := [2]unix.Timespec{
-			{Sec: 0, Nsec: unix.UTIME_OMIT},
-			{Sec: 0, Nsec: unix.UTIME_OMIT},
+			{Sec: 0, Nsec: utimeOmit},
+			{Sec: 0, Nsec: utimeOmit},
 		}
-		if stat.Mask&unix.STATX_ATIME != 0 {
+		if stat.Mask&_STATX_ATIME != 0 {
 			utimes[0].Sec = stat.Atime.Sec
 			utimes[0].Nsec = stat.Atime.Nsec
 		}
-		if stat.Mask&unix.STATX_MTIME != 0 {
+		if stat.Mask&_STATX_MTIME != 0 {
 			utimes[1].Sec = stat.Mtime.Sec
 			utimes[1].Nsec = stat.Mtime.Nsec
 		}
@@ -369,7 +361,7 @@ func (fd *controlFDLisa) SetStat(stat lisafs.SetStatReq) (failureMask uint32, fa
 				unix.Close(parent)
 			}
 			if err != nil {
-				failureMask |= (stat.Mask & (unix.STATX_ATIME | unix.STATX_MTIME))
+				failureMask |= (stat.Mask & (_STATX_ATIME | _STATX_MTIME))
 				failureErr = err
 			}
 		} else {
@@ -388,26 +380,26 @@ func (fd *controlFDLisa) SetStat(stat lisafs.SetStatReq) (failureMask uint32, fa
 			err := fsutil.Utimensat(hostFD, "", utimes, 0)
 			if err != nil {
 				log.Warningf("SetStat utimens failed %q, err: %v", fd.Node().FilePath(), err)
-				failureMask |= (stat.Mask & (unix.STATX_ATIME | unix.STATX_MTIME))
+				failureMask |= (stat.Mask & (_STATX_ATIME | _STATX_MTIME))
 				failureErr = err
 			}
 		}
 	}
 
-	if stat.Mask&(unix.STATX_UID|unix.STATX_GID) != 0 {
+	if stat.Mask&(_STATX_UID|_STATX_GID) != 0 {
 		// "If the owner or group is specified as -1, then that ID is not changed"
 		// - chown(2)
 		uid := lisafs.NoUID
-		if stat.Mask&unix.STATX_UID != 0 {
+		if stat.Mask&_STATX_UID != 0 {
 			uid = stat.UID
 		}
 		gid := lisafs.NoGID
-		if stat.Mask&unix.STATX_GID != 0 {
+		if stat.Mask&_STATX_GID != 0 {
 			gid = stat.GID
 		}
 		if err := fchown(fd.hostFD, uid, gid); err != nil {
 			log.Warningf("SetStat fchown failed %q, err: %v", fd.Node().FilePath(), err)
-			failureMask |= stat.Mask & (unix.STATX_UID | unix.STATX_GID)
+			failureMask |= stat.Mask & (_STATX_UID | _STATX_GID)
 			failureErr = err
 		}
 	}
@@ -421,6 +413,24 @@ func (fd *controlFDLisa) Walk(name string) (*lisafs.ControlFD, lisafs.Statx, err
 		return unix.Openat(fd.hostFD, name, flags, 0)
 	})
 	if err != nil {
+		// On macOS, O_NOFOLLOW prevents opening symlinks (returns ELOOP).
+		// Handle this by stat'ing the symlink and creating a control FD
+		// using the parent directory FD.
+		if err == unix.ELOOP || err == unix.EMLINK {
+			stat, stErr := walkStatAt(fd.hostFD, name)
+			if stErr != nil {
+				return nil, lisafs.Statx{}, stErr
+			}
+			if stat.Mode&unix.S_IFMT == unix.S_IFLNK {
+				// Use dup of parent FD as a placeholder. The symlink
+				// will be resolved by the sentry's VFS layer.
+				symlinkFD, dErr := unix.Dup(fd.hostFD)
+				if dErr != nil {
+					return nil, lisafs.Statx{}, dErr
+				}
+				return newControlFDLisa(symlinkFD, fd, name, linux.ModeSymlink).FD(), stat, nil
+			}
+		}
 		return nil, lisafs.Statx{}, err
 	}
 
@@ -468,10 +478,21 @@ func (fd *controlFDLisa) WalkStat(path lisafs.StringArray, recordStat func(lisaf
 		return nil
 	}
 	for _, name := range path {
-		curFD, err := unix.Openat(curDirFD, name, unix.O_PATH|openFlags, 0)
+		curFD, err := unix.Openat(curDirFD, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 		if err == unix.ENOENT {
 			// No more path components exist on the filesystem. Return the partial
 			// walk to the client.
+			break
+		}
+		if err == unix.ELOOP || err == unix.EMLINK {
+			// On macOS, O_NOFOLLOW on a symlink returns ELOOP.
+			// Stat the symlink without following to get its info.
+			stat, stErr := walkStatAt(curDirFD, name)
+			if stErr != nil {
+				return stErr
+			}
+			recordStat(stat)
+			// Symlinks terminate walk.
 			break
 		}
 		if err != nil {
@@ -529,7 +550,7 @@ func (fd *controlFDLisa) Open(flags uint32) (*lisafs.OpenFD, int, error) {
 		}
 	}
 	flags |= openFlags
-	openHostFD, err := unix.Openat(int(procSelfFD.FD()), strconv.Itoa(fd.hostFD), int(flags)&^unix.O_NOFOLLOW, 0)
+	openHostFD, err := reopenFD(fd.hostFD, int(flags)&^unix.O_NOFOLLOW)
 	if err != nil {
 		return nil, -1, err
 	}
@@ -538,16 +559,15 @@ func (fd *controlFDLisa) Open(flags uint32) (*lisafs.OpenFD, int, error) {
 	switch {
 	case ftype == unix.S_IFREG:
 		// Best effort to donate file to the Sentry (for performance only).
+		// On macOS, skip FD donation — the fdchannel's SOCK_STREAM-based
+		// SendFD hangs when sending via flipcall channels. Without a
+		// donated FD, Translate goes through the page cache (slower but
+		// correct and avoids deadlock).
 		hostFDToDonate, _ = unix.Dup(openHostFD)
 
 	case ftype == unix.S_IFIFO,
 		ftype == unix.S_IFCHR,
 		fd.isMountPoint && fd.Conn().ServerImpl().(*LisafsServer).config.DonateMountPointFD:
-		// Character devices and pipes can block indefinitely during reads/writes,
-		// which is not allowed for gofer operations. Ensure that it donates an FD
-		// back to the caller, so it can wait on the FD when reads/writes return
-		// EWOULDBLOCK. For mount points, if DonateMountPointFD option is set, an
-		// FD must be donated.
 		var err error
 		hostFDToDonate, err = unix.Dup(openHostFD)
 		if err != nil {
@@ -589,7 +609,7 @@ func (fd *controlFDLisa) OpenCreate(mode linux.FileMode, uid lisafs.UID, gid lis
 
 	// Now open an FD to the newly created file with the flags requested by the client.
 	flags |= openFlags
-	newHostFD, err := unix.Openat(int(procSelfFD.FD()), strconv.Itoa(childHostFD), int(flags)&^unix.O_NOFOLLOW, 0)
+	newHostFD, err := reopenFD(childHostFD, int(flags)&^unix.O_NOFOLLOW)
 	if err != nil {
 		return nil, lisafs.Statx{}, nil, -1, err
 	}
@@ -655,7 +675,7 @@ func (fd *controlFDLisa) Mknod(mode linux.FileMode, uid lisafs.UID, gid lisafs.G
 		return nil, lisafs.Statx{}, unix.EPERM
 	}
 
-	if err := unix.Mknodat(fd.hostFD, name, uint32(mode), 0); err != nil {
+	if err := mknodat(fd.hostFD, name, uint32(mode), 0); err != nil {
 		return nil, lisafs.Statx{}, err
 	}
 	cu := cleanup.Make(func() {
@@ -703,7 +723,7 @@ func (fd *controlFDLisa) Symlink(name string, target string, uid lisafs.UID, gid
 	defer cu.Clean()
 
 	// Open symlink to change ownership.
-	symlinkFD, err := unix.Openat(fd.hostFD, name, unix.O_PATH|openFlags, 0)
+	symlinkFD, err := unix.Openat(fd.hostFD, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, lisafs.Statx{}, err
 	}
@@ -768,13 +788,13 @@ func (fd *controlFDLisa) StatFS() (lisafs.StatFS, error) {
 
 	return lisafs.StatFS{
 		Type:            uint64(s.Type),
-		BlockSize:       s.Bsize,
+		BlockSize:       int64(s.Bsize),
 		Blocks:          s.Blocks,
 		BlocksFree:      s.Bfree,
 		BlocksAvailable: s.Bavail,
 		Files:           s.Files,
 		FilesFree:       s.Ffree,
-		NameLength:      uint64(s.Namelen),
+		NameLength:      statfsNameLen(&s),
 	}, nil
 }
 
@@ -783,7 +803,13 @@ func (fd *controlFDLisa) Readlink(getLinkBuf func(uint32) []byte) (uint16, error
 	// This is similar to what os.Readlink does.
 	for linkLen := 128; linkLen < math.MaxUint16; linkLen *= 2 {
 		b := getLinkBuf(uint32(linkLen))
-		n, err := unix.Readlinkat(fd.hostFD, "", b)
+		n, err := readlinkatFD(fd.hostFD, b)
+		if err != nil {
+			// On macOS, the hostFD for a symlink may be a dup of the parent
+			// directory (since O_NOFOLLOW can't open symlinks). Fall back to
+			// using the node's file path.
+			n, err = unix.Readlink(fd.Node().FilePath(), b)
+		}
 		if err != nil {
 			return 0, err
 		}
@@ -1098,7 +1124,7 @@ func (fd *openFDLisa) Read(buf []byte, off uint64) (uint64, error) {
 
 // Allocate implements lisafs.OpenFDImpl.Allocate.
 func (fd *openFDLisa) Allocate(mode, off, length uint64) error {
-	return unix.Fallocate(fd.hostFD, uint32(mode), int64(off), int64(length))
+	return fallocateFD(fd.hostFD, uint32(mode), int64(off), int64(length))
 }
 
 // Flush implements lisafs.OpenFDImpl.Flush.
@@ -1121,7 +1147,7 @@ func (fd *openFDLisa) Getdent64(count uint32, seek0 bool, recordDirent func(lisa
 		if remaining := int(count) - bytesRead; remaining < bufEnd {
 			bufEnd = remaining
 		}
-		n, err := unix.Getdents(fd.hostFD, direntsBuf[:bufEnd])
+		n, err := getdentsFD(fd.hostFD, direntsBuf[:bufEnd])
 		if err != nil {
 			if err == unix.EINVAL && bufEnd < fsutil.UnixDirentMaxSize {
 				// getdents64(2) returns EINVAL is returned when the result
@@ -1152,8 +1178,8 @@ func (fd *openFDLisa) Getdent64(count uint32, seek0 bool, recordDirent func(lisa
 				log.Warningf("Getdent64: skipping file %q with failed stat, err: %v", path.Join(fd.ControlFD().FD().Node().FilePath(), name), err)
 				return
 			}
-			dirent.DevMinor = primitive.Uint32(unix.Minor(stat.Dev))
-			dirent.DevMajor = primitive.Uint32(unix.Major(stat.Dev))
+			dirent.DevMinor = primitive.Uint32(statDevMinor(stat.Dev))
+			dirent.DevMajor = primitive.Uint32(statDevMajor(stat.Dev))
 			recordDirent(dirent)
 			bytesRead += int(reclen)
 		})
@@ -1195,7 +1221,7 @@ func (fd *boundSocketFDLisa) Listen(backlog int32) error {
 // Listen implements lisafs.BoundSocketFD.Accept.
 func (fd *boundSocketFDLisa) Accept() (int, string, error) {
 	flags := unix.O_NONBLOCK | unix.O_CLOEXEC
-	nfd, _, err := unix.Accept4(int(fd.sock.Fd()), flags)
+	nfd, err := accept4FD(int(fd.sock.Fd()), flags)
 	if err != nil {
 		return -1, "", err
 	}
@@ -1211,10 +1237,7 @@ func tryOpen(open func(int) (int, error)) (hostFD int, err error) {
 	//      Use non-blocking to prevent getting stuck inside open(2) for
 	//      FIFOs. This option has no effect on regular files.
 	//   2. PATH: for symlinks, sockets.
-	flags := []int{
-		unix.O_RDONLY | unix.O_NONBLOCK,
-		unix.O_PATH,
-	}
+	flags := append([]int{unix.O_RDONLY | unix.O_NONBLOCK}, tryOpenFallbackFlags()...)
 
 	for _, flag := range flags {
 		hostFD, err = open(flag | openFlags)
@@ -1244,42 +1267,11 @@ func fchown(hostFD int, uid lisafs.UID, gid lisafs.GID) error {
 	if gid.Ok() {
 		g = int(gid)
 	}
-	return unix.Fchownat(hostFD, "", u, g, unix.AT_EMPTY_PATH|unix.AT_SYMLINK_NOFOLLOW)
+	return fchownFD(hostFD, u, g)
 }
 
 func fstatTo(hostFD int) (lisafs.Statx, error) {
-	var stat unix.Stat_t
-	if err := unix.Fstat(hostFD, &stat); err != nil {
-		return lisafs.Statx{}, err
-	}
-
-	return lisafs.Statx{
-		Mask:      unix.STATX_TYPE | unix.STATX_MODE | unix.STATX_INO | unix.STATX_NLINK | unix.STATX_UID | unix.STATX_GID | unix.STATX_SIZE | unix.STATX_BLOCKS | unix.STATX_ATIME | unix.STATX_MTIME | unix.STATX_CTIME,
-		Mode:      uint16(stat.Mode),
-		DevMinor:  unix.Minor(stat.Dev),
-		DevMajor:  unix.Major(stat.Dev),
-		Ino:       stat.Ino,
-		Nlink:     uint32(stat.Nlink),
-		UID:       stat.Uid,
-		GID:       stat.Gid,
-		RdevMinor: unix.Minor(stat.Rdev),
-		RdevMajor: unix.Major(stat.Rdev),
-		Size:      uint64(stat.Size),
-		Blksize:   uint32(stat.Blksize),
-		Blocks:    uint64(stat.Blocks),
-		Atime: lisafs.StatxTimestamp{
-			Sec:  stat.Atim.Sec,
-			Nsec: uint32(stat.Atim.Nsec),
-		},
-		Mtime: lisafs.StatxTimestamp{
-			Sec:  stat.Mtim.Sec,
-			Nsec: uint32(stat.Mtim.Nsec),
-		},
-		Ctime: lisafs.StatxTimestamp{
-			Sec:  stat.Ctim.Sec,
-			Nsec: uint32(stat.Ctim.Nsec),
-		},
-	}, nil
+	return fstatToStatx(hostFD)
 }
 
 func checkSupportedFileType(mode uint32) error {

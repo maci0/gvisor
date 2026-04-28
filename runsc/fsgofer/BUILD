@@ -9,8 +9,13 @@ go_library(
     name = "fsgofer",
     srcs = [
         "lisafs.go",
+        "lisafs_compat_darwin.go",
+        "lisafs_compat_linux.go",
     ],
-    visibility = ["//runsc:__subpackages__"],
+    visibility = [
+        "//cmd/sentrydarwin:__pkg__",
+        "//runsc:__subpackages__",
+    ],
     deps = [
         "//pkg/abi/linux",
         "//pkg/atomicbitops",

@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 420" font-family="Arial, Helvetica, sans-serif" font-size="13">
+  <!-- Background -->
+  <rect x="10" y="10" width="500" height="400" rx="8" fill="none" stroke="#999" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="260" y="30" text-anchor="middle" font-size="11" fill="#666">Host macOS (ARM64)</text>
+
+  <!-- sentrydarwin process box -->
+  <rect x="30" y="42" width="460" height="355" rx="6" fill="#fff" stroke="#888" stroke-width="1"/>
+  <text x="260" y="59" text-anchor="middle" font-size="12" font-weight="bold" fill="#333">sentrydarwin process</text>
+
+  <!-- In-process Gofer (light green) -->
+  <rect x="50" y="72" width="140" height="80" rx="4" fill="#d9ead3" stroke="#6aa84f" stroke-width="1"/>
+  <text x="120" y="95" text-anchor="middle" font-weight="bold" fill="#274e13">In-process</text>
+  <text x="120" y="112" text-anchor="middle" font-weight="bold" fill="#274e13">Gofer</text>
+  <text x="120" y="130" text-anchor="middle" font-size="10" fill="#38761d">(lisafs server)</text>
+  <text x="120" y="145" text-anchor="middle" font-size="10" fill="#38761d">Host FS access</text>
+
+  <!-- Sentry Kernel (light purple) -->
+  <rect x="210" y="72" width="260" height="80" rx="4" fill="#d9d2e9" stroke="#8e7cc3" stroke-width="1"/>
+  <text x="340" y="92" text-anchor="middle" font-weight="bold" fill="#351c75">gVisor Sentry Kernel</text>
+  <text x="340" y="110" text-anchor="middle" font-size="11" fill="#674ea7">VFS (gofer, tmpfs, procfs)</text>
+  <text x="340" y="126" text-anchor="middle" font-size="11" fill="#674ea7">Syscall emulation | Memory mgmt (COW)</text>
+  <text x="340" y="142" text-anchor="middle" font-size="11" fill="#674ea7">TCP/IP stack (netstack)</text>
+
+  <!-- Arrow: Gofer <-> Sentry -->
+  <line x1="190" y1="112" x2="210" y2="112" stroke="#333" stroke-width="1.5" marker-start="url(#arrowL)" marker-end="url(#arrowR)"/>
+
+  <!-- utun endpoint (light yellow) -->
+  <rect x="50" y="165" width="140" height="50" rx="4" fill="#fff2cc" stroke="#f1c232" stroke-width="1"/>
+  <text x="120" y="186" text-anchor="middle" font-weight="bold" fill="#7f6000">utun endpoint</text>
+  <text x="120" y="202" text-anchor="middle" font-size="10" fill="#bf9000">(host networking)</text>
+
+  <!-- HVF Platform (light blue) -->
+  <rect x="210" y="165" width="260" height="80" rx="4" fill="#cfe2f3" stroke="#6d9eeb" stroke-width="1"/>
+  <text x="340" y="187" text-anchor="middle" font-weight="bold" fill="#1155cc">HVF Platform</text>
+  <text x="340" y="205" text-anchor="middle" font-size="11" fill="#3c78d8">Per-MM ARM64 page tables (16K granule)</text>
+  <text x="340" y="221" text-anchor="middle" font-size="11" fill="#3c78d8">vCPU pool (thread-local) | PSTATE xlat</text>
+  <text x="340" y="237" text-anchor="middle" font-size="11" fill="#3c78d8">Exception vector handling | COW fork</text>
+
+  <!-- Arrow: Sentry -> HVF -->
+  <line x1="340" y1="152" x2="340" y2="165" stroke="#333" stroke-width="1.5"/>
+
+  <!-- Hypervisor.framework (light red) -->
+  <rect x="210" y="260" width="260" height="68" rx="4" fill="#f4cccc" stroke="#cc4125" stroke-width="1"/>
+  <text x="340" y="282" text-anchor="middle" font-weight="bold" fill="#990000">Apple Hypervisor.framework</text>
+  <text x="340" y="300" text-anchor="middle" font-size="11" fill="#cc4125">hv_vm_create / hv_vm_map / hv_vcpu_run</text>
+  <text x="340" y="316" text-anchor="middle" font-size="11" fill="#cc4125">Stage 2 translation: IPA → HPA</text>
+
+  <!-- Arrow: HVF -> Hypervisor -->
+  <line x1="340" y1="245" x2="340" y2="260" stroke="#333" stroke-width="1.5"/>
+
+  <!-- Guest binary (light red, bottom) -->
+  <rect x="120" y="345" width="280" height="40" rx="4" fill="#fce5cd" stroke="#e69138" stroke-width="1"/>
+  <text x="260" y="370" text-anchor="middle" font-weight="bold" fill="#783f04">Linux ARM64 ELF Binary (guest at EL1)</text>
+
+  <!-- Arrow: Hypervisor -> Guest -->
+  <line x1="340" y1="328" x2="340" y2="345" stroke="#333" stroke-width="1.5"/>
+
+  <!-- Arrow markers -->
+  <defs>
+    <marker id="arrowR" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#333"/>
+    </marker>
+    <marker id="arrowL" markerWidth="8" markerHeight="6" refX="0" refY="3" orient="auto">
+      <path d="M8,0 L0,3 L8,6 Z" fill="#333"/>
+    </marker>
+  </defs>
+</svg>

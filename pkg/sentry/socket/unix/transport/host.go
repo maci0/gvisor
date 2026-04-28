@@ -103,14 +103,8 @@ func (c *HostConnectedEndpoint) initFromOptions() *syserr.Error {
 		return nil
 	}
 
-	family, err := unix.GetsockoptInt(c.fd, unix.SOL_SOCKET, unix.SO_DOMAIN)
-	if err != nil {
+	if err := checkSocketDomain(c.fd); err != nil {
 		return syserr.FromError(err)
-	}
-
-	if family != unix.AF_UNIX {
-		// We only allow Unix sockets.
-		return syserr.ErrInvalidEndpointState
 	}
 
 	stype, err := unix.GetsockoptInt(c.fd, unix.SOL_SOCKET, unix.SO_TYPE)

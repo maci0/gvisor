@@ -10,6 +10,8 @@ go_library(
     name = "p9",
     srcs = [
         "p9.go",
+        "p9_compat_darwin.go",
+        "p9_compat_linux.go",
     ],
     deps = [
         "//pkg/abi/linux",

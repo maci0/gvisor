@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 160" font-family="Arial, Helvetica, sans-serif" font-size="12">
+  <!-- Title -->
+  <text x="230" y="20" text-anchor="middle" font-size="14" font-weight="bold" fill="#333">IPA Space Layout</text>
+
+  <!-- Memory bar -->
+  <rect x="20" y="40" width="100" height="40" rx="0" fill="#f4cccc" stroke="#cc4125" stroke-width="1"/>
+  <text x="70" y="55" text-anchor="middle" font-size="10" font-weight="bold" fill="#990000">Vectors</text>
+  <text x="70" y="70" text-anchor="middle" font-size="9" fill="#cc4125">0x0 - 0x3FFF</text>
+
+  <rect x="120" y="40" width="120" height="40" rx="0" fill="#cfe2f3" stroke="#6d9eeb" stroke-width="1"/>
+  <text x="180" y="55" text-anchor="middle" font-size="10" font-weight="bold" fill="#1155cc">Page Table Pages</text>
+  <text x="180" y="70" text-anchor="middle" font-size="9" fill="#3c78d8">0x10000 - 0xFFFFF</text>
+
+  <rect x="240" y="40" width="200" height="40" rx="0" fill="#d9d2e9" stroke="#8e7cc3" stroke-width="1"/>
+  <text x="340" y="55" text-anchor="middle" font-size="10" font-weight="bold" fill="#351c75">Data Pages</text>
+  <text x="340" y="70" text-anchor="middle" font-size="9" fill="#674ea7">0x100000+</text>
+
+  <!-- Details below -->
+  <text x="70" y="100" text-anchor="middle" font-size="10" fill="#990000">Exception handlers</text>
+  <text x="70" y="113" text-anchor="middle" font-size="10" fill="#990000">Sigreturn @ 0x804</text>
+  <text x="70" y="126" text-anchor="middle" font-size="10" fill="#990000">TLB flush @ 0x810</text>
+
+  <text x="180" y="100" text-anchor="middle" font-size="10" fill="#3c78d8">L2/L3 tables</text>
+  <text x="180" y="113" text-anchor="middle" font-size="10" fill="#3c78d8">Recycled via free list</text>
+  <text x="180" y="126" text-anchor="middle" font-size="10" fill="#3c78d8">Allocated per MM</text>
+
+  <text x="340" y="100" text-anchor="middle" font-size="10" fill="#674ea7">Host memory via hv_vm_map</text>
+  <text x="340" y="113" text-anchor="middle" font-size="10" fill="#674ea7">Assigned by IPA allocator</text>
+  <text x="340" y="126" text-anchor="middle" font-size="10" fill="#674ea7">Shared across COW forks</text>
+</svg>

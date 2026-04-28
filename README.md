@@ -6,6 +6,15 @@
 [![gVisor chat](https://badges.gitter.im/gvisor/community.png)](https://gitter.im/gvisor/community)
 [![code search](https://img.shields.io/badge/code-search-blue)](https://cs.opensource.google/gvisor/gvisor)
 
+## macOS Port (WIP)
+
+This fork includes an experimental port of gVisor to **macOS Apple Silicon**
+using Apple's Hypervisor.framework. It can run Linux ARM64 binaries and Alpine
+Linux containers directly on macOS without Docker or a Linux VM.
+
+See **[README-MACOS.md](README-MACOS.md)** for build instructions, architecture
+details, and implementation notes.
+
 ## What is gVisor?
 
 **gVisor** provides a strong layer of isolation between running applications and

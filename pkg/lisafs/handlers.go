@@ -33,7 +33,7 @@ import (
 
 const (
 	allowedOpenFlags     = unix.O_ACCMODE | unix.O_TRUNC
-	setStatSupportedMask = unix.STATX_MODE | unix.STATX_UID | unix.STATX_GID | unix.STATX_SIZE | unix.STATX_ATIME | unix.STATX_MTIME
+	setStatSupportedMask = statxMode | statxUID | statxGID | statxSize | statxAtime | statxMtime
 	// unixDirentMaxSize is the maximum size of unix.Dirent for amd64.
 	unixDirentMaxSize = 280
 )
@@ -170,6 +170,7 @@ func MountHandler(c *Connection, comm Communicator, payloadLen uint32) (uint32, 
 func ChannelHandler(c *Connection, comm Communicator, payloadLen uint32) (uint32, error) {
 	ch, desc, fdSock, err := c.createChannel(c.ServerImpl().MaxMessageSize())
 	if err != nil {
+		log.Warningf("ChannelHandler: createChannel failed: %v", err)
 		return 0, err
 	}
 

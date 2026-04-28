@@ -288,6 +288,14 @@ func (t *Task) deliverSignalToHandler(info *linux.SignalInfo, act linux.SigActio
 	if act.Flags&linux.SA_NODEFER == 0 {
 		newMask |= linux.SignalSetOf(linux.Signal(info.Signo))
 	}
+	// Allow SIGURG delivery during non-SIGURG signal handlers.
+	// SIGURG is used by the Go runtime for async goroutine preemption.
+	// It must be deliverable during other handlers (e.g., SIGSEGV)
+	// for GC stop-the-world to work. But keep it blocked during the
+	// SIGURG handler itself to prevent unbounded nesting.
+	if linux.Signal(info.Signo) != linux.SIGURG {
+		newMask &^= linux.SignalSetOf(linux.SIGURG)
+	}
 	t.SetSignalMask(newMask)
 
 	return nil

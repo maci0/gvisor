@@ -109,33 +109,14 @@ func NewFromHost(ctx context.Context, vfsObj *vfs.VirtualFilesystem, hostfd int,
 }
 
 // HostFD returns the host eventfd associated with this event.
+// This is platform-specific: see hostfd_linux.go and hostfd_darwin.go.
 func (efd *EventFileDescription) HostFD() (int, error) {
 	efd.mu.Lock()
 	defer efd.mu.Unlock()
 	if efd.hostfd >= 0 {
 		return efd.hostfd, nil
 	}
-
-	flags := linux.EFD_NONBLOCK
-	if efd.semMode {
-		flags |= linux.EFD_SEMAPHORE
-	}
-
-	fd, _, errno := unix.Syscall(unix.SYS_EVENTFD2, uintptr(efd.val), uintptr(flags), 0)
-	if errno != 0 {
-		return -1, errno
-	}
-
-	if err := fdnotifier.AddFD(int32(fd), &efd.queue); err != nil {
-		if closeErr := unix.Close(int(fd)); closeErr != nil {
-			log.Warningf("close(%d) eventfd failed: %v", fd, closeErr)
-		}
-		return -1, err
-	}
-
-	efd.hostfd = int(fd)
-	efd.sentryOwnedHostfd = true
-	return efd.hostfd, nil
+	return efd.createHostFD()
 }
 
 // Release implements vfs.FileDescriptionImpl.Release.

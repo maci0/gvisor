@@ -23,6 +23,7 @@ import (
 	"gvisor.dev/gvisor/pkg/sentry/arch"
 	"gvisor.dev/gvisor/pkg/sentry/limits"
 	"gvisor.dev/gvisor/pkg/sentry/memmap"
+	"gvisor.dev/gvisor/pkg/safemem"
 	"gvisor.dev/gvisor/pkg/sentry/pgalloc"
 	"gvisor.dev/gvisor/pkg/sentry/platform"
 )
@@ -210,7 +211,11 @@ func (mm *MemoryManager) Fork(ctx context.Context) (*MemoryManager, error) {
 		mm.mf.IncRef(fr, memCgID)
 		addrRange := srcpseg.Range()
 		mm2.addRSSLocked(addrRange)
-		dstpgap = mm2.pmas.Insert(dstpgap, addrRange, *pma).NextGap()
+		pmaCopy := *pma
+		// Clear internal mappings so the child's new AddressSpace
+		// (page table) gets populated via mapASLocked on first access.
+		pmaCopy.internalMappings = safemem.BlockSeq{}
+		dstpgap = mm2.pmas.Insert(dstpgap, addrRange, pmaCopy).NextGap()
 	}
 	if unmapAR.Length() != 0 {
 		mm.unmapASLocked(unmapAR)

@@ -82,7 +82,7 @@ func (h *handle) allocate(ctx context.Context, mode, offset, length uint64) erro
 		return h.fdLisa.Allocate(ctx, mode, offset, length)
 	}
 	if h.fd >= 0 {
-		return unix.Fallocate(int(h.fd), uint32(mode), int64(offset), int64(length))
+		return fallocateFile(int(h.fd), uint32(mode), int64(offset), int64(length))
 	}
 	return nil
 }

@@ -11,6 +11,11 @@ go_library(
         "hosttid.go",
         "hosttid_amd64.tmpl.s",
         "hosttid_arm64.tmpl.s",
+        "hosttid_darwin.go",
+        "hosttid_notdarwin.go",
+    ],
+    deps = [
+        "@org_golang_x_sys//unix:go_default_library",
     ],
     visibility = ["//visibility:public"],
 )

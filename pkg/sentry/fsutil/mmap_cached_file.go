@@ -16,6 +16,7 @@ package fsutil
 
 import (
 	"fmt"
+	"runtime"
 
 	"golang.org/x/sys/unix"
 	"gvisor.dev/gvisor/pkg/atomicbitops"
@@ -260,6 +261,23 @@ func (f *MmapCachedFile) forEachMappingBlockLocked(fr memmap.FileRange, write bo
 	if fd < 0 {
 		return unix.EBADF
 	}
+	// On macOS, safecopy cannot catch SIGBUS (sigreturn doesn't
+	// restore modified mcontext). Clamp fr to file size so we never
+	// read past-EOF pages from the mapping. Pages between file end
+	// and page-aligned end are zero-filled by the kernel; pages
+	// past that would SIGBUS.
+	if runtime.GOOS == "darwin" && !write {
+		var stat unix.Stat_t
+		if err := unix.Fstat(int(fd), &stat); err == nil && fr.End > uint64(stat.Size) {
+			pgend := (uint64(stat.Size) + hostarch.PageSize - 1) &^ (hostarch.PageSize - 1)
+			if fr.End > pgend {
+				fr.End = pgend
+			}
+			if fr.Start >= fr.End {
+				return nil
+			}
+		}
+	}
 	prot := unix.PROT_READ
 	if write {
 		prot |= unix.PROT_WRITE
@@ -276,7 +294,7 @@ func (f *MmapCachedFile) forEachMappingBlockLocked(fr memmap.FileRange, write bo
 				0,
 				chunkSize,
 				uintptr(prot),
-				unix.MAP_SHARED,
+				mmapSharedFlag,
 				uintptr(fd),
 				uintptr(chunkStart))
 			if errno != 0 {
@@ -290,7 +308,7 @@ func (f *MmapCachedFile) forEachMappingBlockLocked(fr memmap.FileRange, write bo
 				m.addr,
 				chunkSize,
 				uintptr(prot),
-				unix.MAP_SHARED|unix.MAP_FIXED,
+				mmapSharedFlag|unix.MAP_FIXED,
 				uintptr(fd),
 				uintptr(chunkStart))
 			if errno != 0 {
@@ -342,7 +360,7 @@ func (f *MmapCachedFile) RegenerateMappings() error {
 			m.addr,
 			chunkSize,
 			uintptr(prot),
-			unix.MAP_SHARED|unix.MAP_FIXED,
+			mmapSharedFlag|unix.MAP_FIXED,
 			uintptr(fd),
 			uintptr(chunkStart))
 		if errno != 0 {

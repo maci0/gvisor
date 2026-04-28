@@ -57,10 +57,21 @@ genrule(
           "$(location vdso.cc) " +
           "$(location vdso_time.cc)",
     features = ["-pie"],
+    target_compatible_with = ["@platforms//os:linux"],
     toolchains = [
         cc_toolchain,
         ":no_pie_cc_flags",
     ],
+    visibility = ["//:sandbox"],
+)
+
+# On macOS, produce an empty VDSO stub. The sentry will skip VDSO
+# loading when it detects an empty/invalid binary.
+genrule(
+    name = "vdso_stub",
+    outs = ["vdso_stub.so"],
+    cmd = "touch $(location vdso_stub.so)",
+    target_compatible_with = ["@platforms//os:macos"],
     visibility = ["//:sandbox"],
 )
 

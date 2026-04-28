@@ -47,7 +47,7 @@ func New(message string, linuxTranslation errno.Errno) *Error {
 	err := &Error{message: message, errno: linuxTranslation}
 
 	// TODO(b/34162363): Remove this.
-	if int(err.errno) >= len(linuxBackwardsTranslations) {
+	if int(err.errno) >= maxLinuxErrno {
 		panic(fmt.Sprint("invalid errno: ", err.errno))
 	}
 
@@ -93,8 +93,12 @@ type linuxBackwardsTranslation struct {
 	ok  bool
 }
 
+// maxLinuxErrno is the maximum Linux errno value. This must be large enough
+// to hold all Linux errno values, regardless of the host platform.
+const maxLinuxErrno = 134
+
 // TODO(b/34162363): Remove this.
-var linuxBackwardsTranslations [maxErrno]linuxBackwardsTranslation
+var linuxBackwardsTranslations [maxLinuxErrno]linuxBackwardsTranslation
 
 // ToError translates an Error to a corresponding error value.
 //

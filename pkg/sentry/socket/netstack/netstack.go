@@ -991,7 +991,7 @@ func GetSockOptSocket(t *kernel.Task, s socket.Socket, ep commonEndpoint, family
 		return &optP, nil
 
 	case linux.SO_PEERCRED:
-		if family != linux.AF_UNIX || outLen < unix.SizeofUcred {
+		if family != linux.AF_UNIX || outLen < 12 /* sizeof(struct ucred) */ {
 			return nil, syserr.ErrInvalidArgument
 		}
 		return s.GetPeerCreds(t)

@@ -134,6 +134,13 @@ func initializeAddresses() {
 
 func init() {
 	initializeAddresses()
+	if runtime.GOOS == "darwin" {
+		// macOS ARM64 does not support modifying mcontext registers
+		// in signal handlers — sigreturn does not restore the modified
+		// context. Skip safecopy signal handler installation; callers
+		// must not trigger SIGBUS/SIGSEGV through safecopy paths.
+		return
+	}
 	if err := sighandling.ReplaceSignalHandler(unix.SIGSEGV, addrOfSignalHandler(), &savedSigSegVHandler); err != nil {
 		panic(fmt.Sprintf("Unable to set handler for SIGSEGV: %v", err))
 	}

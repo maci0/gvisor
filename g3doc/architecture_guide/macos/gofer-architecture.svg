@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 200" font-family="Arial, Helvetica, sans-serif" font-size="12">
+  <!-- Title -->
+  <text x="240" y="20" text-anchor="middle" font-size="14" font-weight="bold" fill="#333">In-Process Gofer Filesystem</text>
+
+  <!-- sentrydarwin box -->
+  <rect x="15" y="35" width="450" height="150" rx="6" fill="#fff" stroke="#888" stroke-width="1" stroke-dasharray="5,3"/>
+  <text x="240" y="52" text-anchor="middle" font-size="11" fill="#888">sentrydarwin process</text>
+
+  <!-- Sentry VFS (purple) -->
+  <rect x="30" y="65" width="170" height="100" rx="4" fill="#d9d2e9" stroke="#8e7cc3" stroke-width="1.5"/>
+  <text x="115" y="85" text-anchor="middle" font-weight="bold" fill="#351c75">Sentry VFS</text>
+  <text x="115" y="105" text-anchor="middle" font-size="11" fill="#674ea7">gofer.FilesystemType</text>
+  <text x="115" y="121" text-anchor="middle" font-size="11" fill="#674ea7">(mounted at /)</text>
+  <text x="115" y="145" text-anchor="middle" font-size="10" fill="#674ea7">lisafs.Client</text>
+
+  <!-- socketpair arrow -->
+  <line x1="200" y1="115" x2="270" y2="115" stroke="#333" stroke-width="1.5" marker-start="url(#aL)" marker-end="url(#aR)"/>
+  <text x="235" y="108" text-anchor="middle" font-size="9" fill="#666">socketpair</text>
+
+  <!-- fsgofer (green) -->
+  <rect x="270" y="65" width="180" height="100" rx="4" fill="#d9ead3" stroke="#6aa84f" stroke-width="1.5"/>
+  <text x="360" y="85" text-anchor="middle" font-weight="bold" fill="#274e13">fsgofer.LisafsServer</text>
+  <text x="360" y="105" text-anchor="middle" font-size="11" fill="#38761d">lisafs.Server</text>
+  <text x="360" y="125" text-anchor="middle" font-size="11" fill="#38761d">Host I/O via POSIX</text>
+  <text x="360" y="145" text-anchor="middle" font-size="10" fill="#38761d">(--rootfs directory)</text>
+
+  <defs>
+    <marker id="aR" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><path d="M0,0 L7,2.5 L0,5 Z" fill="#333"/></marker>
+    <marker id="aL" markerWidth="7" markerHeight="5" refX="0" refY="2.5" orient="auto"><path d="M7,0 L0,2.5 L7,5 Z" fill="#333"/></marker>
+  </defs>
+</svg>

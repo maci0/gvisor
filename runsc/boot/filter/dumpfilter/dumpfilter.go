@@ -66,7 +66,7 @@ func main() {
 			os.Exit(1)
 		}
 		if isAll {
-			flagCaps |= nvconf.AllContainerDriverCaps
+			flagCaps |= nvconf.SupportedDriverCaps
 		}
 		nvCaps = flagCaps
 	}

@@ -8,6 +8,8 @@ go_library(
     name = "eventfd",
     srcs = [
         "eventfd.go",
+        "hostfd_darwin.go",
+        "hostfd_linux.go",
         "save_restore.go",
     ],
     visibility = ["//pkg/sentry:internal"],

@@ -32,9 +32,8 @@ const sizeofInt32 = int(unsafe.Sizeof(int32(0)))
 // NewConnectedSockets returns a pair of file descriptors, owned by the caller,
 // representing connected sockets that may be passed to separate calls to
 // NewEndpoint to create connected Endpoints.
-func NewConnectedSockets() ([2]int, error) {
-	return unix.Socketpair(unix.AF_UNIX, unix.SOCK_SEQPACKET|unix.SOCK_CLOEXEC, 0)
-}
+//
+// NewConnectedSockets is defined in platform-specific files.
 
 // Endpoint sends file descriptors to, and receives them from, another
 // connected Endpoint.
@@ -43,22 +42,20 @@ func NewConnectedSockets() ([2]int, error) {
 type Endpoint struct {
 	sockfd int32
 	msghdr unix.Msghdr
+	iov    unix.Iovec    // used on macOS for 1-byte stream data
 	cmsg   *unix.Cmsghdr // followed by sizeofInt32 bytes of data
 }
 
 // Init must be called on zero-value Endpoints before first use. sockfd must be
-// a blocking AF_UNIX SOCK_SEQPACKET socket.
+// a blocking AF_UNIX socket (SOCK_SEQPACKET on Linux, SOCK_STREAM on macOS).
 func (ep *Endpoint) Init(sockfd int) {
-	// "Datagram sockets in various domains (e.g., the UNIX and Internet
-	// domains) permit zero-length datagrams." - recv(2). Experimentally,
-	// sendmsg+recvmsg for a zero-length datagram is slightly faster than
-	// sendmsg+recvmsg for a single byte over a stream socket.
 	cmsgSlice := make([]byte, unix.CmsgSpace(sizeofInt32))
 	ep.sockfd = int32(sockfd)
 	ep.msghdr.Control = (*byte)(unsafe.Pointer(&cmsgSlice[0]))
 	ep.cmsg = (*unix.Cmsghdr)(unsafe.Pointer(&cmsgSlice[0]))
 	// ep.msghdr.Controllen and ep.cmsg.* are mutated by recvmsg(2), so they're
 	// set before calling sendmsg/recvmsg.
+	ep.initIov()
 }
 
 // NewEndpoint is a convenience function that returns an initialized Endpoint
@@ -95,7 +92,7 @@ func (ep *Endpoint) SendFD(fd int) error {
 	ep.cmsg.SetLen(cmsgLen)
 	*ep.cmsgData() = int32(fd)
 	ep.msghdr.SetControllen(cmsgLen)
-	_, _, e := unix.Syscall(unix.SYS_SENDMSG, uintptr(ep.sockfd), uintptr(unsafe.Pointer(&ep.msghdr)), 0)
+	_, _, e := unix.Syscall(unix.SYS_SENDMSG, uintptr(ep.sockfd), uintptr(unsafe.Pointer(&ep.msghdr)), sendFDFlags())
 	if e != 0 {
 		return e
 	}

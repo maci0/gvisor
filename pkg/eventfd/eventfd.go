@@ -34,19 +34,6 @@ type Eventfd struct {
 	mmioCtrl MMIOController
 }
 
-// Create returns an initialized eventfd.
-func Create() (Eventfd, error) {
-	fd, _, err := unix.RawSyscall(unix.SYS_EVENTFD2, 0, 0, 0)
-	if err != 0 {
-		return Eventfd{}, fmt.Errorf("failed to create eventfd: %v", error(err))
-	}
-	if err := unix.SetNonblock(int(fd), true); err != nil {
-		unix.Close(int(fd))
-		return Eventfd{}, err
-	}
-	return Eventfd{fd: int(fd)}, nil
-}
-
 // Wrap returns an initialized Eventfd using the provided fd.
 func Wrap(fd int) Eventfd {
 	return Eventfd{fd: fd}
@@ -57,6 +44,7 @@ func (ev Eventfd) Close() error {
 	if ev.mmioCtrl != nil {
 		ev.mmioCtrl.Close(ev)
 	}
+	closeExtra(ev.fd)
 	return unix.Close(ev.fd)
 }
 

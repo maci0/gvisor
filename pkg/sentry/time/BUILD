@@ -34,8 +34,9 @@ go_library(
         "tsc_amd64.s",
         "tsc_arm64.s",
         "vdso.go",
+        "vdso_darwin.go",
         "vdso_amd64.s",
-        "vdso_arm64.s",
+        "vdso_linux_arm64.s",
     ],
     visibility = ["//:sandbox"],
     deps = [

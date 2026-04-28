@@ -8,10 +8,12 @@ package(
 go_library(
     name = "rawfile",
     srcs = [
-        "blockingpoll_amd64.s",
-        "blockingpoll_arm64.s",
+        "blockingpoll_darwin.go",
+        "blockingpoll_linux_amd64.s",
+        "blockingpoll_linux_arm64.s",
         "blockingpoll_noyield_unsafe.go",
         "blockingpoll_yield_unsafe.go",
+        "rawfile_darwin.go",
         "rawfile_unsafe.go",
     ],
     visibility = ["//visibility:public"],

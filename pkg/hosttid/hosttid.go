@@ -26,5 +26,4 @@ const _ = runtime.Compiler
 // is in effect, this function is inherently racy since the Go runtime may
 // migrate the calling goroutine to another thread at any time.
 //
-// Current is equivalent to unix.Gettid(), but faster.
-func Current() uint64
+// Current is provided by platform-specific files.

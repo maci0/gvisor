@@ -8,6 +8,7 @@ package(
 go_library(
     name = "memutil",
     srcs = [
+        "memfd_darwin.go",
         "memfd_linux_unsafe.go",
         "memutil_unsafe.go",
         "mmap.go",

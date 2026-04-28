@@ -768,7 +768,7 @@ func (s *Socket) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags int, have
 		if !wantCreds {
 			msgFlags |= linux.MSG_CTRUNC
 		}
-		credLen := unix.CmsgSpace(unix.SizeofUcred)
+		credLen := unix.CmsgSpace(12) // sizeof(struct ucred) = 12
 		rightsLen -= credLen
 	}
 	// FDs are 32 bit (4 byte) ints.

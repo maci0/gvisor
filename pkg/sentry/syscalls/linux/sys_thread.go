@@ -169,8 +169,10 @@ func ExitGroup(t *kernel.Task, sysno uintptr, args arch.SyscallArguments) (uintp
 
 // clone is used by Clone, Fork, and VFork.
 func clone(t *kernel.Task, flags int, stack hostarch.Addr, parentTID hostarch.Addr, childTID hostarch.Addr, tls hostarch.Addr) (uintptr, *kernel.SyscallControl, error) {
+	fl := uint64(uint32(flags) &^ linux.CSIGNAL)
+
 	args := linux.CloneArgs{
-		Flags:      uint64(uint32(flags) &^ linux.CSIGNAL),
+		Flags: fl,
 		ChildTID:   uint64(childTID),
 		ParentTID:  uint64(parentTID),
 		ExitSignal: uint64(flags & linux.CSIGNAL),

@@ -142,6 +142,8 @@ go_library(
         "epoll_mutex.go",
         "event_list.go",
         "file_description.go",
+        "file_description_darwin.go",
+        "file_description_linux.go",
         "file_description_impl_util.go",
         "file_description_refs.go",
         "filesystem.go",

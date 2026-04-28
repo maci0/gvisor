@@ -147,12 +147,13 @@ func (c *Client) StartChannels() error {
 
 	// Check that atleast 1 channel is created. This is not required by lisafs
 	// protocol. It exists to flag server side issues in channel creation.
+	// On macOS, flipcall channels may not be supported, so we allow the
+	// fallback to the main socket.
 	c.channelsMu.Lock()
 	numChannels := len(c.channels)
 	c.channelsMu.Unlock()
 	if maxChans > 0 && numChannels == 0 {
-		log.Warningf("all channel RPCs failed")
-		return unix.ENOMEM
+		log.Warningf("all channel RPCs failed, falling back to socket RPC")
 	}
 	return nil
 }
@@ -163,13 +164,13 @@ func (c *Client) watchdog() {
 	events := []unix.PollFd{
 		{
 			Fd:     int32(c.sockComm.FD()),
-			Events: unix.POLLHUP | unix.POLLRDHUP,
+			Events: unix.POLLHUP | pollRDHUP,
 		},
 	}
 
 	// Wait for a shutdown event.
 	for {
-		n, err := unix.Ppoll(events, nil, nil)
+		n, err := ppoll(events, nil, nil)
 		if err == unix.EINTR || err == unix.EAGAIN {
 			continue
 		}

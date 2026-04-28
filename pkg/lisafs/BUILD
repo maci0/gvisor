@@ -82,6 +82,8 @@ go_library(
         "channel.go",
         "client.go",
         "client_file.go",
+        "compat_darwin.go",
+        "compat_linux.go",
         "communicator.go",
         "connection.go",
         "control_fd_list.go",

@@ -10,7 +10,9 @@ go_library(
         "fsutil.go",
         "fsutil_amd64_unsafe.go",
         "fsutil_arm64_unsafe.go",
+        "fsutil_darwin.go",
         "fsutil_unsafe.go",
+        "fsutil_unsafe_darwin.go",
     ],
     visibility = ["//visibility:public"],
     deps = [

@@ -192,13 +192,24 @@ func (pt *guestPageTable) unmapPage(guestVA uint64) uint64 {
 	return ipa
 }
 
-// release returns all page table pages to the allocator's free list.
+// release walks all L3 entries to unmap data IPAs, then returns all
+// page table pages to the allocator's free list.
 func (pt *guestPageTable) release() {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
 
-	// Return all L3 table pages.
+	// Walk all L3 tables and unmap data IPAs.
 	for _, l3 := range pt.l3Tables {
+		l3Slice := unsafe.Slice((*byte)(l3.hostMem), hvfPageSize)
+		for i := 0; i < l3Entries; i++ {
+			entry := binary.LittleEndian.Uint64(l3Slice[i*8:])
+			if entry&validBit != 0 {
+				ipa := entry & 0x0000FFFFFFFC000
+				if ipa != 0 { // Skip vectors page (IPA 0)
+					pt.machine.ipaAlloc.unmapIPA(ipa)
+				}
+			}
+		}
 		pt.machine.ptAlloc.freePage(l3.hostMem, l3.ipa)
 	}
 	pt.l3Tables = nil

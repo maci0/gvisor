@@ -26,8 +26,8 @@
 | OpenSSL/libcrypto (apk, curl) | Working |
 | Go static binaries (fmt, os, crypto) | Working |
 | /proc/cpuinfo (Apple Silicon features) | Working |
-| Package install (`apk add`) | Working (54+ packages from main+community) |
-| Dynamically-linked packages | Working (jq, gawk, bc, less, tree, file, grep, sed, lua, sqlite, etc.) |
+| Package install (`apk add`) | Working (57+ packages from main+community) |
+| Dynamically-linked packages | Working — 45/45 test pass rate |
 | OCI / Docker image support | Not implemented |
 
 Run Linux containers on macOS Apple Silicon using gVisor's sentry kernel and Apple's Hypervisor.framework.

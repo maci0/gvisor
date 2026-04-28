@@ -500,9 +500,9 @@ func IMAWorkAroundForMemFile(fd uintptr) {
 		fd,
 		0)
 	if errno != 0 {
-		// This isn't fatal (IMA may not even be in use). Log the error, but
-		// don't return it.
-		log.Warningf("Failed to pre-map MemoryFile PROT_EXEC: %v", errno)
+		// This isn't fatal (IMA may not even be in use, and macOS doesn't
+		// support this). Log at debug level.
+		log.Debugf("Failed to pre-map MemoryFile PROT_EXEC: %v", errno)
 	} else {
 		if _, _, errno := unix.Syscall(
 			unix.SYS_MUNMAP,
@@ -983,9 +983,9 @@ func tryPopulateMadv(b safemem.Block) bool {
 	}
 	errno := madvisePopulateWrite(b)
 	if errno != 0 {
-		if errno == unix.EINVAL {
-			// EINVAL is expected if MADV_POPULATE_WRITE is not supported (Linux <5.14).
-			log.Infof("Disabling pgalloc.MemoryFile.AllocateAndFill pre-population: madvise failed: %s", errno)
+		if errno == unix.EINVAL || errno == unix.ENOSYS {
+			// EINVAL expected on Linux <5.14, ENOSYS on macOS.
+			log.Debugf("Disabling pgalloc.MemoryFile.AllocateAndFill pre-population: madvise: %s", errno)
 		} else {
 			log.Warningf("Disabling pgalloc.MemoryFile.AllocateAndFill pre-population: madvise failed: %s", errno)
 		}
@@ -1104,7 +1104,9 @@ func (f *MemoryFile) manuallyZero(fr memmap.FileRange) {
 
 func (f *MemoryFile) decommitOrManuallyZero(fr memmap.FileRange) {
 	if err := f.decommitFile(fr); err != nil {
-		log.Warningf("Failed to decommit %v: %v", fr, err)
+		if err != unix.ENOSYS {
+			log.Warningf("Failed to decommit %v: %v", fr, err)
+		}
 		// Zero the pages manually. This won't reduce memory usage, but at
 		// least ensures that the pages will be zeroed when reallocated.
 		f.manuallyZero(fr)

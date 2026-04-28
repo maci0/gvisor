@@ -181,7 +181,7 @@ type VDSO struct {
 // param page for updating by the kernel.
 func PrepareVDSO(mf *pgalloc.MemoryFile) (*VDSO, error) {
 	if len(vdsodata.Binary) == 0 {
-		log.Warningf("VDSO binary is empty, skipping VDSO loading")
+		log.Debugf("VDSO binary is empty, skipping VDSO loading")
 		return prepareEmptyVDSO(mf)
 	}
 

@@ -250,7 +250,7 @@ func readHWCap(auxvFilepath string) (hwCap, error) {
 func initHWCap() {
 	c, err := readHWCap("/proc/self/auxv")
 	if err != nil {
-		log.Warningf("cpuid HWCap not initialized: %v", err)
+		log.Debugf("cpuid HWCap not initialized: %v", err)
 	} else {
 		hostFeatureSet.hwCap = c
 	}

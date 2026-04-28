@@ -176,7 +176,7 @@ func (c *hvfContext) Switch(
 						return returnAndRelease(&c.info, at, platform.ErrContextSignal)
 					}
 
-					// Other exception.
+					// Other exception — deliver SIGILL.
 					log.Warningf("HVF: unhandled exception (hvc#%d): origEC=%#x ESR_EL1=%#x ELR_EL1=%#x",
 						hvcImm, origEC, esrEL1, vcpu.getSysReg(C.HV_SYS_REG_ELR_EL1))
 					c.info = linux.SignalInfo{}

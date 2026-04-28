@@ -74,14 +74,17 @@ func (a *ipaAllocator) mapPage(hostAddr uintptr, size uintptr) (uint64, error) {
 		return ipa, nil
 	}
 
-	// Reuse a freed IPA if available, otherwise allocate new.
+	// Prefer fresh IPAs until we hit 512GB, then reuse freed ones.
+	// Early reuse causes stage-2 TLB staleness. Deferring reuse
+	// until we've consumed significant IPA space gives HVF time
+	// to flush stage-2 TLB entries for unmapped IPAs.
 	var ipa uint64
-	if len(a.freeIPAs) > 0 && size == hvfPageSize {
-		ipa = a.freeIPAs[len(a.freeIPAs)-1]
-		a.freeIPAs = a.freeIPAs[:len(a.freeIPAs)-1]
-	} else {
+	if a.nextIPA < (1 << 39) || len(a.freeIPAs) == 0 {
 		ipa = a.nextIPA
 		a.nextIPA += uint64(size)
+	} else {
+		ipa = a.freeIPAs[len(a.freeIPAs)-1]
+		a.freeIPAs = a.freeIPAs[:len(a.freeIPAs)-1]
 	}
 
 	// Map into HVF.

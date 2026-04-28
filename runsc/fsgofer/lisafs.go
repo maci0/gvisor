@@ -722,8 +722,14 @@ func (fd *controlFDLisa) Symlink(name string, target string, uid lisafs.UID, gid
 	})
 	defer cu.Clean()
 
-	// Open symlink to change ownership.
-	symlinkFD, err := unix.Openat(fd.hostFD, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	// Open symlink to change ownership. On macOS, O_NOFOLLOW rejects
+	// symlinks with ELOOP. Use O_SYMLINK (0x200000) to open the symlink
+	// itself rather than following it.
+	openFlags := unix.O_RDONLY | unix.O_NOFOLLOW | unix.O_CLOEXEC
+	if runtime.GOOS == "darwin" {
+		openFlags = unix.O_RDONLY | 0x200000 | unix.O_CLOEXEC // O_SYMLINK
+	}
+	symlinkFD, err := unix.Openat(fd.hostFD, name, openFlags, 0)
 	if err != nil {
 		return nil, lisafs.Statx{}, err
 	}

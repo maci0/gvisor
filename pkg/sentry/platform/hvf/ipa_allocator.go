@@ -41,6 +41,9 @@ type ipaAllocator struct {
 	hostToIPA map[uintptr]uint64
 	// refCount tracks how many address spaces reference each IPA.
 	refCount map[uint64]int
+	// freeIPAs holds IPAs that were unmapped and can be reused.
+	// Prevents nextIPA from growing without bound.
+	freeIPAs []uint64
 }
 
 // ipaBase is the start of the allocatable IPA range. The first 16MB
@@ -71,9 +74,15 @@ func (a *ipaAllocator) mapPage(hostAddr uintptr, size uintptr) (uint64, error) {
 		return ipa, nil
 	}
 
-	// Assign a new IPA.
-	ipa := a.nextIPA
-	a.nextIPA += uint64(size)
+	// Reuse a freed IPA if available, otherwise allocate new.
+	var ipa uint64
+	if len(a.freeIPAs) > 0 && size == hvfPageSize {
+		ipa = a.freeIPAs[len(a.freeIPAs)-1]
+		a.freeIPAs = a.freeIPAs[:len(a.freeIPAs)-1]
+	} else {
+		ipa = a.nextIPA
+		a.nextIPA += uint64(size)
+	}
 
 	// Map into HVF.
 	ret := C.hv_vm_map(unsafe.Pointer(hostAddr), C.hv_ipa_t(ipa), C.size_t(size),
@@ -108,6 +117,7 @@ func (a *ipaAllocator) unmapIPA(ipa uint64) {
 		}
 		delete(a.refCount, ipa)
 		C.hv_vm_unmap(C.hv_ipa_t(ipa), C.size_t(hvfPageSize))
+		a.freeIPAs = append(a.freeIPAs, ipa)
 	}
 }
 

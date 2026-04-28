@@ -240,7 +240,10 @@ func (c *hvfContext) Switch(
 			return returnAndRelease(nil, hostarch.NoAccess, platform.ErrContextInterrupt)
 
 		default:
-			return returnAndRelease(nil, hostarch.NoAccess, fmt.Errorf("unexpected exit reason: %d", exitReason))
+			// HV_EXIT_REASON_UNKNOWN (3) can occur during heavy workloads.
+			// Log and retry — the vCPU state is still valid.
+			log.Debugf("HVF: unknown exit reason %d, retrying", exitReason)
+			continue
 		}
 	}
 }

@@ -758,6 +758,11 @@ func setupGoferRoot(k *kernel.Kernel, vfsObj *vfs.VirtualFilesystem, creds *auth
 	if err != nil {
 		fatal("socketpair: %v", err)
 	}
+	// Increase socket buffer for heavy workloads (e.g., Python package install).
+	unix.SetsockoptInt(fds[0], unix.SOL_SOCKET, unix.SO_RCVBUF, 1<<20)
+	unix.SetsockoptInt(fds[0], unix.SOL_SOCKET, unix.SO_SNDBUF, 1<<20)
+	unix.SetsockoptInt(fds[1], unix.SOL_SOCKET, unix.SO_RCVBUF, 1<<20)
+	unix.SetsockoptInt(fds[1], unix.SOL_SOCKET, unix.SO_SNDBUF, 1<<20)
 
 	// Start the gofer server on one end.
 	serverSock, err := unet.NewSocket(fds[0])

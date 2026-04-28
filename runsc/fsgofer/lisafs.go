@@ -379,9 +379,10 @@ func (fd *controlFDLisa) SetStat(stat lisafs.SetStatReq) (failureMask uint32, fa
 			// using empty name.
 			err := fsutil.Utimensat(hostFD, "", utimes, 0)
 			if err != nil {
-				log.Warningf("SetStat utimens failed %q, err: %v", fd.Node().FilePath(), err)
-				failureMask |= (stat.Mask & (_STATX_ATIME | _STATX_MTIME))
-				failureErr = err
+				// ENOENT can happen if the file was renamed between
+				// open and utimensat (common with apk temp files).
+				// Non-fatal — the file still exists under its new name.
+				log.Debugf("SetStat utimens %q: %v (non-fatal)", fd.Node().FilePath(), err)
 			}
 		}
 	}

@@ -46,6 +46,18 @@ import (
 	"gvisor.dev/gvisor/pkg/sentry/platform/interrupt"
 )
 
+// abortAccessType returns the access type for a data or instruction abort
+// based on the exception class and ISS (Instruction Specific Syndrome).
+func abortAccessType(ec, iss uint64) hostarch.AccessType {
+	if ec == 0x20 || ec == 0x21 { // Instruction abort
+		return hostarch.Execute
+	}
+	if iss&0x40 != 0 { // WnR bit (Write not Read)
+		return hostarch.Write
+	}
+	return hostarch.Read
+}
+
 // hvfContext implements platform.Context.
 type hvfContext struct {
 	// machine is the parent machine, and is immutable.
@@ -135,13 +147,7 @@ func (c *hvfContext) Switch(
 				// determine which vector entry triggered this exit.
 				hvcImm := syndrome & 0xffff
 
-				// HVC #0: current-EL synchronous (vector offset 0x000)
-				// HVC #8: lower-EL synchronous (vector offset 0x400, el0_sync)
-				//
-				// Both paths read ESR_EL1 to determine the original
-				// exception. In Phase 2, HVC #8 (lower-EL) will be
-				// handled entirely at EL1 without HVC exit, enabling
-				// fast-path syscall processing in the sentry kernel.
+				// HVC #0: current-EL sync, HVC #8: lower-EL sync (el0_sync).
 				if hvcImm == 0 || hvcImm == 8 {
 					// Check ESR_EL1 to determine the original exception.
 					esrEL1 := vcpu.getSysReg(C.HV_SYS_REG_ESR_EL1)
@@ -161,19 +167,10 @@ func (c *hvfContext) Switch(
 						far := vcpu.getSysReg(C.HV_SYS_REG_FAR_EL1)
 						log.Debugf("HVF fault (hvc#%d): EC=%#x FAR=%#x ISS=%#x PC=%#x",
 							hvcImm, origEC, far, esrEL1&0x1ffffff, vcpu.getSysReg(C.HV_SYS_REG_ELR_EL1))
-						at := hostarch.NoAccess
-						iss := esrEL1 & 0x1ffffff
-						if origEC == 0x20 || origEC == 0x21 { // Instruction abort
-							at = hostarch.Execute
-						} else if iss&0x40 != 0 { // WnR bit
-							at = hostarch.Write
-						} else {
-							at = hostarch.Read
-						}
 						c.info = linux.SignalInfo{}
 						c.info.Signo = int32(linux.SIGSEGV)
 						c.info.SetAddr(far)
-						return returnAndRelease(&c.info, at, platform.ErrContextSignal)
+						return returnAndRelease(&c.info, abortAccessType(origEC, esrEL1&0x1ffffff), platform.ErrContextSignal)
 					}
 
 					// Other exception — deliver SIGILL.
@@ -193,25 +190,13 @@ func (c *hvfContext) Switch(
 			}
 
 			if ec == 0x24 || ec == 0x25 || ec == 0x20 || ec == 0x21 { // Direct data/instruction abort
-				// Stage 2 fault: the guest accessed an IPA that isn't
-				// mapped in HVF. Return to the sentry to call MapFile.
-				// The vCPU was paused at the faulting instruction;
-				// read the actual PC from HV_REG_PC.
+				// Stage-2 fault: guest accessed unmapped IPA.
 				ac.Regs.Pc = vcpu.getReg(C.HV_REG_PC)
 				far := vcpu.getFaultAddress()
-				at := hostarch.NoAccess
-				iss := syndrome & 0x1ffffff
-				if ec == 0x20 || ec == 0x21 { // Instruction abort
-					at = hostarch.Execute
-				} else if iss&0x40 != 0 { // Data abort, WnR bit
-					at = hostarch.Write
-				} else {
-					at = hostarch.Read
-				}
 				c.info = linux.SignalInfo{}
 				c.info.Signo = int32(linux.SIGSEGV)
 				c.info.SetAddr(far)
-				return returnAndRelease(&c.info, at, platform.ErrContextSignal)
+				return returnAndRelease(&c.info, abortAccessType(ec, syndrome&0x1ffffff), platform.ErrContextSignal)
 			}
 
 			// Unknown/unhandled exception (e.g., EC=0x19 SVE trap,

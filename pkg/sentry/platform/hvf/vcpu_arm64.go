@@ -80,10 +80,13 @@ import (
 
 // Exit reason constants.
 const (
-	exitReasonException      = C.HV_EXIT_REASON_EXCEPTION
-	exitReasonCanceled       = C.HV_EXIT_REASON_CANCELED
+	exitReasonException       = C.HV_EXIT_REASON_EXCEPTION
+	exitReasonCanceled        = C.HV_EXIT_REASON_CANCELED
 	exitReasonVtimerActivated = C.HV_EXIT_REASON_VTIMER_ACTIVATED
 )
+
+// ARM64 PSTATE masks.
+const nzcvMask = 0xf0000000 // NZCV condition flags [31:28]
 
 // Maximum user address for HVF on ARM64. Identity-mapped page tables
 // cover 64GB (36-bit VA with 16K granule, T0SZ=28). Subtract space
@@ -368,7 +371,7 @@ func (c *vCPU) loadRegisters(ac *arch.Context64) {
 	// SPSR_EL1 determines what ERET returns to: EL0t (mode=0x0), no DAIF.
 	// Preserve NZCV flags from the saved Pstate.
 	c.setSysReg(C.HV_SYS_REG_ELR_EL1, regs.Pc)
-	spsr := (regs.Pstate & 0xf0000000) // NZCV + EL0t (mode=0) + DAIF clear
+	spsr := regs.Pstate & nzcvMask // EL0t (mode=0), DAIF clear
 	c.setSysReg(C.HV_SYS_REG_SPSR_EL1, spsr)
 	c.setReg(C.HV_REG_PC, c.machine.vectorsAddr+0x810) // TLB flush + ERET stub
 	c.setReg(C.HV_REG_CPSR, 0x3c5)                     // EL1h, DAIF masked (stub runs at EL1)
@@ -393,7 +396,9 @@ func (c *vCPU) saveRegisters(ac *arch.Context64) {
 	// Guest runs at EL0t, so mode bits are already 0x0.
 	// Clear DAIF bits (0x3c0) to normalize — EL0 never has DAIF masked.
 	pstate := c.getSysReg(C.HV_SYS_REG_SPSR_EL1)
-	regs.Pstate = pstate &^ 0x3cf
+	// Clear mode bits (EL1h→EL0t) and DAIF mask bits.
+	const modeDaifMask = 0x3cf // mode[3:0] | DAIF[9:6]
+	regs.Pstate = pstate &^ modeDaifMask
 
 	// TLS register.
 	regs.TPIDR_EL0 = c.getSysReg(C.HV_SYS_REG_TPIDR_EL0)

@@ -79,7 +79,10 @@ func (a *ipaAllocator) mapPage(hostAddr uintptr, size uintptr) (uint64, error) {
 	// until we've consumed significant IPA space gives HVF time
 	// to flush stage-2 TLB entries for unmapped IPAs.
 	var ipa uint64
-	if a.nextIPA < (1 << 39) || len(a.freeIPAs) == 0 {
+	// ipaReuseThreshold: prefer fresh IPAs until 512GB to avoid
+	// stage-2 TLB staleness from immediate IPA reuse.
+	const ipaReuseThreshold = 1 << 39 // 512GB
+	if a.nextIPA < ipaReuseThreshold || len(a.freeIPAs) == 0 {
 		ipa = a.nextIPA
 		a.nextIPA += uint64(size)
 	} else {

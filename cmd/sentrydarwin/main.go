@@ -59,7 +59,7 @@ import (
 	"gvisor.dev/gvisor/pkg/sentry/loader"
 	"gvisor.dev/gvisor/pkg/sentry/pgalloc"
 	"gvisor.dev/gvisor/pkg/sentry/platform"
-	_ "gvisor.dev/gvisor/pkg/sentry/platform/hvf"     // register HVF platform
+	"gvisor.dev/gvisor/pkg/sentry/platform/hvf"
 	_ "gvisor.dev/gvisor/pkg/sentry/platform/platforms"
 	"gvisor.dev/gvisor/pkg/sentry/socket/netstack"
 	_ "gvisor.dev/gvisor/pkg/sentry/socket/netstack"        // AF_INET provider
@@ -388,7 +388,7 @@ func main() {
 	// Set the sigreturn trampoline address.
 	if leader := tg.Leader(); leader != nil {
 		if mm := leader.MemoryManager(); mm != nil {
-			mm.SetVDSOSigReturn(0x804)
+			mm.SetVDSOSigReturn(hvf.SigreturnAddr)
 		}
 	}
 

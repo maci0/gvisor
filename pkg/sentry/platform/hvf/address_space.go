@@ -24,8 +24,6 @@ package hvf
 import "C"
 
 import (
-	"unsafe"
-
 	"gvisor.dev/gvisor/pkg/hostarch"
 	"gvisor.dev/gvisor/pkg/sentry/memmap"
 	"gvisor.dev/gvisor/pkg/sentry/platform"
@@ -144,6 +142,3 @@ func (as *addressSpace) PreFork() {}
 
 // PostFork implements platform.AddressSpace.PostFork.
 func (as *addressSpace) PostFork() {}
-
-// Suppress unused import warning.
-var _ = unsafe.Pointer(nil)

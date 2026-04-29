@@ -337,25 +337,9 @@ func (m *machine) setupSharedMemory() error {
 	return nil
 }
 
-// pageTableGPA was the old identity-mapped page table IPA.
-// Kept for reference; per-MM page tables use ptPageAllocator IPAs.
-const pageTableGPA = vectorsPageSize // unused, kept for sigreturnAddr offset
-
-// sigreturnAddr is the guest address of the sigreturn trampoline
-// in the vectors page. Used as the signal restorer (R30).
-const sigreturnAddr = 0x804
-
-// ring0EntryOffset is the offset of the ring0 entry stub in the
-// vectors page. Switches TTBR0/TCR and ERETs to EL0.
-const ring0EntryOffset = 0x820
-
-// ring0EntryAddr returns the VA of the ring0 entry stub.
-// Uses the upper-half VA (TTBR1) so that changing TTBR0/TCR
-// doesn't affect instruction fetch during the switch.
-func ring0EntryAddr() uint64 {
-	return uint64(kernelVABase) + ring0EntryOffset
-}
-
+// SigreturnAddr is the guest VA of the sigreturn trampoline in the
+// vectors page (offset 0x804). Used as the signal restorer (R30).
+const SigreturnAddr = 0x804
 
 // loadRegisters loads application registers from arch.Context64 into the vCPU
 // and sets up the EL1-to-EL0 transition via ERET.

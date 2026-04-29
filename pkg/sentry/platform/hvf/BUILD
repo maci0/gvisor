@@ -17,7 +17,6 @@ go_library(
         "machine.go",
         "memory_el1.go",
         "pagetable.go",
-        "ring0_state.go",
         "runtime_el1.go",
         "sentry_pagetable.go",
         "syscall_el1.go",

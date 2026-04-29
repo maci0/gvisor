@@ -58,11 +58,8 @@ func New() (*HVF, error) {
 		return nil, err
 	}
 
-	// Ring0 mode (TCR T0SZ swap from 16↔28) disabled in production —
-	// races with concurrent fork. Direct TLBI at EL1 via the 0x810
-	// stub provides TLB coherency without ring0 overhead.
-	// Bluepill infrastructure retained for testing.
-	_ = newSentryPageTable
+	// Ring0 mode disabled — TCR T0SZ swap races with concurrent fork.
+	// Bluepill test infrastructure retained in sentry_pagetable.go.
 
 	return &HVF{machine: m}, nil
 }

@@ -565,19 +565,17 @@ func createNetworkStack(clock tcpip.Clock, k *kernel.Kernel, enableUtun bool) *n
 
 				// Drop root privileges unless --keep-root is set.
 				if !*flagKeepRoot {
-				if sudoUID := os.Getenv("SUDO_UID"); sudoUID != "" {
-					var uid, gid int
-					fmt.Sscanf(sudoUID, "%d", &uid)
-					fmt.Sscanf(os.Getenv("SUDO_GID"), "%d", &gid)
-					if uid > 0 {
-						if gid > 0 {
-							unix.Setgid(gid)
-							unix.Setgroups([]int{gid})
+					if sudoUID := os.Getenv("SUDO_UID"); sudoUID != "" {
+						var uid, gid int
+						if _, err := fmt.Sscanf(sudoUID, "%d", &uid); err == nil && uid > 0 {
+							if _, err := fmt.Sscanf(os.Getenv("SUDO_GID"), "%d", &gid); err == nil && gid > 0 {
+								unix.Setgid(gid)
+								unix.Setgroups([]int{gid})
+							}
+							unix.Setuid(uid)
+							log.Infof("Dropped privileges to uid=%d gid=%d", uid, gid)
 						}
-						unix.Setuid(uid)
-						log.Infof("Dropped root privileges to uid=%d gid=%d", uid, gid)
 					}
-				}
 				}
 
 				log.Infof("Host networking enabled: %s (guest=%s, host=%s, proxy=on)", utunEP.Name(), guestIPv4, hostIP)

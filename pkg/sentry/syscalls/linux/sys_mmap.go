@@ -36,16 +36,12 @@ func Brk(t *kernel.Task, sysno uintptr, args arch.SyscallArguments) (uintptr, *k
 	return uintptr(addr), nil, nil
 }
 
-// Mmap implements Linux syscall mmap(2).
 // page4KRound rounds a 4K-aligned address and length to 16K boundaries
-// for the mm layer. Returns the adjusted address, length, offset delta.
+// for the mm layer on hosts with 16K pages (macOS ARM64).
 func page4KRound(addr hostarch.Addr, length uint64, offset uint64) (hostarch.Addr, uint64, uint64) {
 	aligned := addr & ^hostarch.Addr(hostarch.PageSize-1)
 	delta := uint64(addr - aligned)
 	newLen := (length + delta + uint64(hostarch.PageSize-1)) & ^uint64(hostarch.PageSize-1)
-	// Adjust offset back by delta to maintain addr-offset relationship.
-	// If offset < delta, the mapping starts before the file — clamp to 0
-	// and let the mm layer zero-fill the gap.
 	var newOffset uint64
 	if offset >= delta {
 		newOffset = offset - delta
@@ -53,6 +49,7 @@ func page4KRound(addr hostarch.Addr, length uint64, offset uint64) (hostarch.Add
 	return aligned, newLen, newOffset
 }
 
+// Mmap implements Linux syscall mmap(2).
 func Mmap(t *kernel.Task, sysno uintptr, args arch.SyscallArguments) (uintptr, *kernel.SyscallControl, error) {
 	prot := args[2].Int()
 	flags := args[3].Int()
@@ -154,15 +151,13 @@ func Mmap(t *kernel.Task, sysno uintptr, args arch.SyscallArguments) (uintptr, *
 	}
 
 	// In page4K mode, round addresses/lengths to 16K for the mm layer.
+	var origAddr hostarch.Addr
 	if mm.Page4KMode() {
-		// Sub-16K PROT_NONE MAP_FIXED: guest is placing a 4K guard page.
-		// Don't create a 16K VMA (would clobber adjacent memory).
-		// Return success without creating a VMA — the page table has
-		// no entry for this range, so accesses fault as intended.
+		// Sub-16K PROT_NONE MAP_FIXED: no-op (4K guard page).
 		if opts.Fixed && !opts.Perms.Any() && opts.Length < uint64(hostarch.PageSize) {
 			return uintptr(opts.Addr), nil, nil
 		}
-		// Round addr to 16K if 4K-aligned but not 16K-aligned.
+		origAddr = opts.Addr
 		if opts.Addr&0xFFF == 0 && opts.Addr&hostarch.Addr(hostarch.PageSize-1) != 0 {
 			newAddr, newLen, newOff := page4KRound(opts.Addr, opts.Length, opts.Offset)
 			opts.Addr = newAddr
@@ -171,14 +166,22 @@ func Mmap(t *kernel.Task, sysno uintptr, args arch.SyscallArguments) (uintptr, *
 				opts.Offset = newOff
 			}
 		}
-		// Round length up to 16K for the mm layer's VMA alignment.
 		if opts.Length > 0 && opts.Length < uint64(hostarch.PageSize) {
 			opts.Length = uint64(hostarch.PageSize)
 		}
 	}
 
 	rv, err := t.MemoryManager().MMap(t, opts)
-	return uintptr(rv), nil, err
+	if err != nil {
+		return 0, nil, err
+	}
+	// page4KRound adjusts the file offset so data at origAddr is
+	// correct, but the VMA starts at the rounded address. Return
+	// origAddr so the guest sees the address it requested.
+	if origAddr != 0 && opts.Fixed && origAddr != rv {
+		return uintptr(origAddr), nil, nil
+	}
+	return uintptr(rv), nil, nil
 }
 
 // Munmap implements linux syscall munmap(2).

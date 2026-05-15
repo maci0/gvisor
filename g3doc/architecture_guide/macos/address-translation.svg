@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 280" font-family="Arial, Helvetica, sans-serif" font-size="12">
+  <!-- Title -->
+  <text x="280" y="22" text-anchor="middle" font-size="14" font-weight="bold" fill="#333">Two-Level Address Translation</text>
+
+  <!-- Guest VA box -->
+  <rect x="20" y="45" width="130" height="55" rx="4" fill="#d9d2e9" stroke="#8e7cc3" stroke-width="1.5"/>
+  <text x="85" y="67" text-anchor="middle" font-weight="bold" fill="#351c75">Guest VA</text>
+  <text x="85" y="85" text-anchor="middle" font-size="11" fill="#674ea7">e.g. 0x400000</text>
+
+  <!-- Stage 1 arrow -->
+  <line x1="150" y1="72" x2="195" y2="72" stroke="#8e7cc3" stroke-width="2" marker-end="url(#arrowPurple)"/>
+  <text x="172" y="63" text-anchor="middle" font-size="10" fill="#8e7cc3">Stage 1</text>
+
+  <!-- IPA box -->
+  <rect x="195" y="45" width="130" height="55" rx="4" fill="#cfe2f3" stroke="#6d9eeb" stroke-width="1.5"/>
+  <text x="260" y="67" text-anchor="middle" font-weight="bold" fill="#1155cc">IPA</text>
+  <text x="260" y="85" text-anchor="middle" font-size="11" fill="#3c78d8">e.g. 0x1A3000</text>
+
+  <!-- Stage 2 arrow -->
+  <line x1="325" y1="72" x2="370" y2="72" stroke="#6d9eeb" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  <text x="347" y="63" text-anchor="middle" font-size="10" fill="#6d9eeb">Stage 2</text>
+
+  <!-- Host PA box -->
+  <rect x="370" y="45" width="160" height="55" rx="4" fill="#f4cccc" stroke="#cc4125" stroke-width="1.5"/>
+  <text x="450" y="67" text-anchor="middle" font-weight="bold" fill="#990000">Host PA</text>
+  <text x="450" y="85" text-anchor="middle" font-size="11" fill="#cc4125">e.g. 0x1045B2000</text>
+
+  <!-- Stage 1 detail box -->
+  <rect x="20" y="125" width="240" height="140" rx="4" fill="#ead1dc" stroke="#c27ba0" stroke-width="1"/>
+  <text x="140" y="145" text-anchor="middle" font-weight="bold" font-size="12" fill="#85200c">Stage 1: Per-MM Page Tables</text>
+  <text x="140" y="165" text-anchor="middle" font-size="11" fill="#85200c">Software-managed by HVF platform</text>
+
+  <text x="35" y="188" font-size="11" fill="#333" font-weight="bold">L2 table</text>
+  <text x="35" y="203" font-size="10" fill="#555">2048 entries, 32MB each</text>
+  <text x="35" y="218" font-size="10" fill="#555">Points to L3 tables</text>
+
+  <text x="145" y="188" font-size="11" fill="#333" font-weight="bold">L3 table</text>
+  <text x="145" y="203" font-size="10" fill="#555">2048 entries, 16K each</text>
+  <text x="145" y="218" font-size="10" fill="#555">IPA | nG | AF | AP[2]</text>
+
+  <text x="35" y="240" font-size="10" fill="#85200c">ASID in TTBR0_EL1 for TLB invalidation</text>
+  <text x="35" y="255" font-size="10" fill="#85200c">AP[2]=1 for COW (read-only pages)</text>
+
+  <!-- Stage 2 detail box -->
+  <rect x="280" y="125" width="250" height="140" rx="4" fill="#d0e0e3" stroke="#76a5af" stroke-width="1"/>
+  <text x="405" y="145" text-anchor="middle" font-weight="bold" font-size="12" fill="#0c343d">Stage 2: HVF (hardware)</text>
+  <text x="405" y="165" text-anchor="middle" font-size="11" fill="#0c343d">Managed by Hypervisor.framework</text>
+
+  <text x="295" y="188" font-size="11" fill="#333" font-weight="bold">hv_vm_map()</text>
+  <text x="295" y="203" font-size="10" fill="#555">host_addr → IPA mapping</text>
+  <text x="295" y="218" font-size="10" fill="#555">RWX permissions</text>
+
+  <text x="295" y="240" font-size="10" fill="#0c343d">IPA allocator caches mappings</text>
+  <text x="295" y="255" font-size="10" fill="#0c343d">Shared across all address spaces</text>
+
+  <!-- Arrow markers -->
+  <defs>
+    <marker id="arrowPurple" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#8e7cc3"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#6d9eeb"/>
+    </marker>
+  </defs>
+</svg>

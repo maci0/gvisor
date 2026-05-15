@@ -554,7 +554,7 @@ func main() {
 
 	// Forward host signals to the guest.
 	sigCh := make(chan os.Signal, 4)
-	signal.Notify(sigCh, unix.SIGINT, unix.SIGTERM, unix.SIGHUP, unix.SIGWINCH)
+	signal.Notify(sigCh, unix.SIGINT, unix.SIGTERM, unix.SIGHUP, unix.SIGWINCH, unix.SIGALRM)
 	go func() {
 		for sig := range sigCh {
 			s := sig.(unix.Signal)

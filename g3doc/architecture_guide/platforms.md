@@ -76,6 +76,22 @@ expected to eventually be removed entirely. If you depend on `ptrace`, and
 `systrap` doesn't fulfill your needs, please
 [voice your feedback](../community.md).
 
+### HVF (macOS, experimental)
+
+The HVF platform uses Apple's [Hypervisor.framework][hvf] to run the Sentry on
+macOS Apple Silicon. Like KVM, it uses hardware virtualization, but targets
+ARM64 and uses a different API (`hv_vm_create`, `hv_vm_map`, `hv_vcpu_run`).
+
+The guest runs at EL1 with per-process ARM64 page tables (16K granule). PSTATE
+is translated between EL1h (guest) and EL0t (sentry) on each vCPU exit/entry.
+Copy-on-write fork is supported via AP[2] permission bits in page table entries.
+
+Host filesystem access is provided by an in-process gofer using the lisafs
+protocol, and host networking uses macOS utun devices.
+
+For details, see the [HVF platform documentation](macos/hvf_platform.md) and
+[gofer porting notes](macos/gofer.md).
+
 ## Changing Platforms
 
 See [Changing Platforms](../user_guide/platforms.md).
@@ -84,3 +100,4 @@ See [Changing Platforms](../user_guide/platforms.md).
 [platform]: https://cs.opensource.google/gvisor/gvisor/+/release-20190304.1:pkg/sentry/platform/platform.go;l=33
 [ptrace]: http://man7.org/linux/man-pages/man2/ptrace.2.html
 [GKE Sandbox]: https://cloud.google.com/kubernetes-engine/docs/concepts/sandbox-pods
+[hvf]: https://developer.apple.com/documentation/hypervisor

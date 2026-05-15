@@ -4,7 +4,7 @@
 #
 # Requires: sentrydarwin binary built and signed in current directory.
 
-set -euo pipefail
+set -uo pipefail
 
 ROOTFS="${1:-_tmp/alpine-rootfs}"
 SENTRY="./sentrydarwin"
@@ -29,16 +29,27 @@ run_test() {
     local cmd="$2"
     local expect="$3"
     local timeout="${4:-15}"
+    local tmpf
+    tmpf=$(mktemp)
 
-    result=$(perl -e "alarm $timeout; exec @ARGV" -- $SENTRY --rootfs "$ROOTFS" /bin/sh -c "$cmd" 2>/dev/null || true)
+    # Run sentry with stdout to temp file. Watchdog sends SIGTERM after
+    # timeout, then SIGKILL after 1s grace for output flush.
+    $SENTRY --rootfs "$ROOTFS" /bin/sh -c "$cmd" >"$tmpf" 2>/dev/null &
+    local spid=$!
+    (sleep "$timeout"; kill "$spid" 2>/dev/null; sleep 1; kill -9 "$spid" 2>/dev/null) &
+    local wpid=$!
+    wait "$spid" 2>/dev/null || true
+    kill "$wpid" 2>/dev/null || true
+    wait "$wpid" 2>/dev/null || true
 
-    if echo "$result" | grep -q "$expect"; then
+    if [ -z "$expect" ] || grep -q "$expect" "$tmpf" 2>/dev/null; then
         PASS=$((PASS+1))
         printf "  PASS  %s\n" "$name"
     else
         FAIL=$((FAIL+1))
-        printf "  FAIL  %s (expected '%s', got '%s')\n" "$name" "$expect" "$(echo "$result" | head -1)"
+        printf "  FAIL  %s (expected '%s', got '%s')\n" "$name" "$expect" "$(head -1 "$tmpf")"
     fi
+    rm -f "$tmpf"
 }
 
 skip_test() {
@@ -240,7 +251,17 @@ bench() {
     local cmd="$2"
     local timeout="${3:-30}"
     local result
-    result=$(perl -e "alarm $timeout; exec @ARGV" -- $SENTRY --rootfs "$ROOTFS" /bin/sh -c "$cmd" 2>/dev/null || echo "timeout")
+    local tmpf
+    tmpf=$(mktemp)
+    $SENTRY --rootfs "$ROOTFS" /bin/sh -c "$cmd" >"$tmpf" 2>/dev/null &
+    local spid=$!
+    (sleep "$timeout"; kill "$spid" 2>/dev/null; sleep 1; kill -9 "$spid" 2>/dev/null) &
+    local wpid=$!
+    wait "$spid" 2>/dev/null || true
+    kill "$wpid" 2>/dev/null || true
+    wait "$wpid" 2>/dev/null || true
+    result=$(cat "$tmpf" 2>/dev/null || echo "timeout")
+    rm -f "$tmpf"
     printf "  %-24s %s\n" "$name" "$result"
 }
 bench "getpid 10K" "python3 -c 'import os,time; t=time.monotonic(); [os.getpid() for _ in range(10000)]; print(f\"{(time.monotonic()-t)*1e6/10000:.0f} us/call\")'" 30

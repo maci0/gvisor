@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 140" font-family="Arial, Helvetica, sans-serif" font-size="12">
+  <!-- Title -->
+  <text x="260" y="20" text-anchor="middle" font-size="14" font-weight="bold" fill="#333">Host Networking via utun</text>
+
+  <!-- macOS host (blue) -->
+  <rect x="20" y="40" width="150" height="80" rx="4" fill="#cfe2f3" stroke="#6d9eeb" stroke-width="1.5"/>
+  <text x="95" y="63" text-anchor="middle" font-weight="bold" fill="#1155cc">macOS Host</text>
+  <text x="95" y="83" text-anchor="middle" font-size="13" fill="#3c78d8">192.168.110.1</text>
+  <text x="95" y="100" text-anchor="middle" font-size="10" fill="#3c78d8">(host endpoint)</text>
+
+  <!-- utun tunnel (yellow) -->
+  <rect x="190" y="50" width="140" height="60" rx="20" fill="#fff2cc" stroke="#f1c232" stroke-width="1.5"/>
+  <text x="260" y="75" text-anchor="middle" font-weight="bold" fill="#7f6000">utun (L3)</text>
+  <text x="260" y="93" text-anchor="middle" font-size="10" fill="#bf9000">4-byte AF header</text>
+
+  <!-- Arrows -->
+  <line x1="170" y1="80" x2="190" y2="80" stroke="#333" stroke-width="1.5" marker-start="url(#uL)" marker-end="url(#uR)"/>
+  <line x1="330" y1="80" x2="350" y2="80" stroke="#333" stroke-width="1.5" marker-start="url(#uL)" marker-end="url(#uR)"/>
+
+  <!-- gVisor guest (purple) -->
+  <rect x="350" y="40" width="150" height="80" rx="4" fill="#d9d2e9" stroke="#8e7cc3" stroke-width="1.5"/>
+  <text x="425" y="63" text-anchor="middle" font-weight="bold" fill="#351c75">gVisor Guest</text>
+  <text x="425" y="83" text-anchor="middle" font-size="13" fill="#674ea7">192.168.110.2</text>
+  <text x="425" y="100" text-anchor="middle" font-size="10" fill="#674ea7">(netstack NIC)</text>
+
+  <!-- Note -->
+  <text x="260" y="135" text-anchor="middle" font-size="10" fill="#666">Subnet per instance: utunN gets 192.168.(100+N).0/30</text>
+
+  <defs>
+    <marker id="uR" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><path d="M0,0 L7,2.5 L0,5 Z" fill="#333"/></marker>
+    <marker id="uL" markerWidth="7" markerHeight="5" refX="0" refY="2.5" orient="auto"><path d="M7,0 L0,2.5 L7,5 Z" fill="#333"/></marker>
+  </defs>
+</svg>

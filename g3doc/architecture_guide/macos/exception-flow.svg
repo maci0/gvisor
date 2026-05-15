@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 520" font-family="Arial, Helvetica, sans-serif" font-size="12">
+  <defs>
+    <marker id="arrowDown" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#333"/></marker>
+    <marker id="arrowGreen" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#38761d"/></marker>
+    <marker id="arrowOrange" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#e69138"/></marker>
+    <marker id="arrowRed" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#cc4125"/></marker>
+    <marker id="arrowBlue" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#1155cc"/></marker>
+  </defs>
+
+  <text x="280" y="22" text-anchor="middle" font-size="14" font-weight="bold" fill="#333">Exception Handling Flow (HVF ARM64)</text>
+
+  <!-- Guest Code -->
+  <rect x="180" y="40" width="200" height="36" rx="4" fill="#fce5cd" stroke="#e69138" stroke-width="1.5"/>
+  <text x="280" y="58" text-anchor="middle" font-weight="bold" fill="#783f04">Guest Code (EL0)</text>
+  <text x="280" y="72" text-anchor="middle" font-size="10" fill="#b45f06">Linux ARM64 binary</text>
+
+  <line x1="280" y1="76" x2="280" y2="95" stroke="#333" stroke-width="1.5" marker-end="url(#arrowDown)"/>
+  <text x="365" y="90" font-size="10" fill="#666">SVC #0 / fault</text>
+
+  <!-- Exception Vectors -->
+  <rect x="140" y="95" width="280" height="48" rx="4" fill="#d9d2e9" stroke="#8e7cc3" stroke-width="1.5"/>
+  <text x="280" y="113" text-anchor="middle" font-weight="bold" fill="#351c75">EL1 Exception Vectors (0x400)</text>
+  <text x="280" y="130" text-anchor="middle" font-size="10" fill="#674ea7">MRS ESR_EL1 → dispatch by EC + X8</text>
+
+  <!-- Three branches from vectors -->
+  <!-- Fast-path (left) -->
+  <line x1="200" y1="143" x2="85" y2="175" stroke="#38761d" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+  <rect x="10" y="175" width="150" height="55" rx="4" fill="#d9ead3" stroke="#6aa84f" stroke-width="1.5"/>
+  <text x="85" y="193" text-anchor="middle" font-weight="bold" font-size="11" fill="#274e13">Fast-Path ERET</text>
+  <text x="85" y="207" text-anchor="middle" font-size="10" fill="#38761d">11 syscalls: getpid,</text>
+  <text x="85" y="219" text-anchor="middle" font-size="10" fill="#38761d">gettid, yield, etc.</text>
+
+  <!-- Return arrow from fast-path back to guest -->
+  <path d="M10,200 C-15,200 -15,58 180,58" fill="none" stroke="#38761d" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrowGreen)"/>
+  <text x="25" y="140" font-size="9" fill="#38761d" transform="rotate(-90,25,140)">~0.1µs ERET</text>
+
+  <!-- HVC exit (center) -->
+  <line x1="280" y1="143" x2="280" y2="175" stroke="#333" stroke-width="1.5" marker-end="url(#arrowDown)"/>
+  <text x="345" y="165" font-size="10" fill="#666">HVC #9 / #8</text>
+
+  <!-- Dispatch page (right, optional) -->
+  <line x1="360" y1="143" x2="460" y2="175" stroke="#1155cc" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowBlue)"/>
+  <rect x="395" y="175" width="155" height="55" rx="4" fill="#cfe2f3" stroke="#6d9eeb" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="472" y="193" text-anchor="middle" font-weight="bold" font-size="11" fill="#1155cc">Dispatch Page</text>
+  <text x="472" y="207" text-anchor="middle" font-size="10" fill="#3c78d8">TTBR1 code via BLR</text>
+  <text x="472" y="219" text-anchor="middle" font-size="10" fill="#3c78d8">(Go asm / C compiled)</text>
+
+  <!-- HVF VM exit -->
+  <rect x="180" y="175" width="200" height="40" rx="4" fill="#f4cccc" stroke="#cc4125" stroke-width="1.5"/>
+  <text x="280" y="193" text-anchor="middle" font-weight="bold" fill="#990000">HVF VM Exit (~3µs)</text>
+  <text x="280" y="208" text-anchor="middle" font-size="10" fill="#cc4125">hv_vcpu_run returns</text>
+
+  <line x1="280" y1="215" x2="280" y2="240" stroke="#333" stroke-width="1.5" marker-end="url(#arrowDown)"/>
+
+  <!-- context.Switch -->
+  <rect x="160" y="240" width="240" height="36" rx="4" fill="#cfe2f3" stroke="#6d9eeb" stroke-width="1.5"/>
+  <text x="280" y="258" text-anchor="middle" font-weight="bold" fill="#1155cc">context.Switch()</text>
+  <text x="280" y="272" text-anchor="middle" font-size="10" fill="#3c78d8">saveRegisters (lazy FP) → dispatch</text>
+
+  <!-- Three outcomes -->
+  <!-- Syscall -->
+  <line x1="185" y1="276" x2="85" y2="310" stroke="#38761d" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+  <rect x="15" y="310" width="140" height="50" rx="4" fill="#d9ead3" stroke="#6aa84f" stroke-width="1"/>
+  <text x="85" y="328" text-anchor="middle" font-weight="bold" font-size="11" fill="#274e13">HVC #9 (SVC)</text>
+  <text x="85" y="345" text-anchor="middle" font-size="10" fill="#38761d">Sentry syscall handler</text>
+
+  <!-- Fault -->
+  <line x1="280" y1="276" x2="280" y2="310" stroke="#e69138" stroke-width="1.5" marker-end="url(#arrowOrange)"/>
+  <rect x="195" y="310" width="170" height="50" rx="4" fill="#fff2cc" stroke="#f1c232" stroke-width="1"/>
+  <text x="280" y="328" text-anchor="middle" font-weight="bold" font-size="11" fill="#7f6000">HVC #8 (Fault)</text>
+  <text x="280" y="345" text-anchor="middle" font-size="10" fill="#bf9000">HandleUserFault → MapFile</text>
+
+  <!-- Other -->
+  <line x1="375" y1="276" x2="470" y2="310" stroke="#cc4125" stroke-width="1.5" marker-end="url(#arrowRed)"/>
+  <rect x="400" y="310" width="145" height="50" rx="4" fill="#f4cccc" stroke="#cc4125" stroke-width="1"/>
+  <text x="472" y="328" text-anchor="middle" font-weight="bold" font-size="11" fill="#990000">EC=0x18 (MRS)</text>
+  <text x="472" y="345" text-anchor="middle" font-size="10" fill="#cc4125">emulateSysreg</text>
+
+  <!-- Return to guest -->
+  <line x1="85" y1="360" x2="85" y2="400" stroke="#333" stroke-width="1" marker-end="url(#arrowDown)"/>
+  <line x1="280" y1="360" x2="280" y2="400" stroke="#333" stroke-width="1" marker-end="url(#arrowDown)"/>
+  <line x1="472" y1="360" x2="472" y2="400" stroke="#333" stroke-width="1" marker-end="url(#arrowDown)"/>
+
+  <!-- Re-entry box -->
+  <rect x="60" y="400" width="460" height="44" rx="4" fill="#fce5cd" stroke="#e69138" stroke-width="1.5"/>
+  <text x="290" y="418" text-anchor="middle" font-weight="bold" fill="#783f04">loadRegisters → ERET stub (TLBI+ERET) → Guest EL0</text>
+  <text x="290" y="436" text-anchor="middle" font-size="10" fill="#b45f06">~800ns load + ~3µs VM entry = ~4µs re-entry</text>
+
+  <!-- Legend -->
+  <rect x="10" y="460" width="540" height="50" rx="4" fill="#f5f5f5" stroke="#ccc" stroke-width="1"/>
+  <text x="20" y="478" font-size="10" fill="#333" font-weight="bold">Legend:</text>
+  <rect x="80" y="470" width="12" height="12" fill="#d9ead3" stroke="#6aa84f"/>
+  <text x="96" y="480" font-size="10" fill="#333">Fast-path (~0.1µs)</text>
+  <rect x="210" y="470" width="12" height="12" fill="#f4cccc" stroke="#cc4125"/>
+  <text x="226" y="480" font-size="10" fill="#333">VM exit (~4µs)</text>
+  <rect x="330" y="470" width="12" height="12" fill="#cfe2f3" stroke="#6d9eeb" stroke-dasharray="3,2"/>
+  <text x="346" y="480" font-size="10" fill="#333">Dispatch page (optional)</text>
+
+  <text x="20" y="500" font-size="10" fill="#666">11 fast-path: getpid/ppid/uid/euid/gid/egid/tid, set_tid_address, sched_yield, getpgid(0), getsid(0)</text>
+</svg>

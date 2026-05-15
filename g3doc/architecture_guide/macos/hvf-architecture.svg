@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 500" font-family="Arial, Helvetica, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#555"/></marker>
+  </defs>
+
+  <!-- Host -->
+  <rect x="10" y="10" width="560" height="480" rx="8" fill="none" stroke="#999" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="290" y="30" text-anchor="middle" font-size="11" fill="#666">Host macOS (ARM64)</text>
+
+  <!-- Sentry -->
+  <rect x="30" y="40" width="520" height="130" rx="6" fill="#cfe2f3" stroke="#6d9eeb" stroke-width="1.5"/>
+  <text x="290" y="58" text-anchor="middle" font-weight="bold" fill="#1155cc">Sentry (Go runtime)</text>
+
+  <rect x="45" y="65" width="120" height="35" rx="3" fill="#fff" stroke="#6d9eeb"/>
+  <text x="105" y="87" text-anchor="middle" font-size="11" fill="#1155cc">Switch() loop</text>
+
+  <rect x="175" y="65" width="120" height="35" rx="3" fill="#fff" stroke="#6d9eeb"/>
+  <text x="235" y="87" text-anchor="middle" font-size="11" fill="#1155cc">Syscall dispatch</text>
+
+  <rect x="305" y="65" width="110" height="35" rx="3" fill="#fff" stroke="#6d9eeb"/>
+  <text x="360" y="87" text-anchor="middle" font-size="11" fill="#1155cc">mm / fs / net</text>
+
+  <rect x="425" y="65" width="110" height="35" rx="3" fill="#fff" stroke="#6d9eeb"/>
+  <text x="480" y="87" text-anchor="middle" font-size="11" fill="#1155cc">IPA allocator</text>
+
+  <rect x="45" y="108" width="170" height="28" rx="3" fill="#fff" stroke="#6d9eeb"/>
+  <text x="130" y="127" text-anchor="middle" font-size="10" fill="#3c78d8">loadGPRegs / saveGPRegs (CGo)</text>
+
+  <rect x="225" y="108" width="170" height="28" rx="3" fill="#fff" stroke="#6d9eeb"/>
+  <text x="310" y="127" text-anchor="middle" font-size="10" fill="#3c78d8">lazy FP save (skip on SVC exit)</text>
+
+  <rect x="405" y="108" width="130" height="28" rx="3" fill="#fff" stroke="#6d9eeb"/>
+  <text x="470" y="127" text-anchor="middle" font-size="10" fill="#3c78d8">SignalMasker sync</text>
+
+  <!-- HVF API -->
+  <line x1="290" y1="170" x2="290" y2="195" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="380" y="186" font-size="10" fill="#666">hv_vcpu_run / hv_vm_map</text>
+
+  <!-- VM Box -->
+  <rect x="30" y="195" width="520" height="275" rx="6" fill="#fef9e7" stroke="#e69138" stroke-width="1.5"/>
+  <text x="290" y="213" text-anchor="middle" font-weight="bold" fill="#b45f06">HVF VM (ARM64 vCPU)</text>
+
+  <!-- EL1 zone -->
+  <rect x="45" y="222" width="490" height="120" rx="4" fill="#d9d2e9" stroke="#8e7cc3" stroke-width="1"/>
+  <text x="290" y="240" text-anchor="middle" font-weight="bold" font-size="12" fill="#351c75">EL1 — Exception Handlers</text>
+
+  <rect x="55" y="248" width="145" height="42" rx="3" fill="#fff" stroke="#8e7cc3"/>
+  <text x="127" y="265" text-anchor="middle" font-size="10" font-weight="bold" fill="#351c75">Fast-path table</text>
+  <text x="127" y="280" text-anchor="middle" font-size="9" fill="#674ea7">11 syscalls → ERET</text>
+
+  <rect x="210" y="248" width="145" height="42" rx="3" fill="#fff" stroke="#8e7cc3"/>
+  <text x="282" y="265" text-anchor="middle" font-size="10" font-weight="bold" fill="#351c75">Dispatch page</text>
+  <text x="282" y="280" text-anchor="middle" font-size="9" fill="#674ea7">Go asm on TTBR1</text>
+
+  <rect x="365" y="248" width="160" height="42" rx="3" fill="#fff" stroke="#8e7cc3"/>
+  <text x="445" y="265" text-anchor="middle" font-size="10" font-weight="bold" fill="#351c75">State page (TTBR1)</text>
+  <text x="445" y="280" text-anchor="middle" font-size="9" fill="#674ea7">pid/tid/mask per vCPU</text>
+
+  <rect x="55" y="296" width="245" height="22" rx="2" fill="#e8d5f5" stroke="#8e7cc3"/>
+  <text x="177" y="312" text-anchor="middle" font-size="9" fill="#351c75">TTBR1: vectors + state + dispatch (AP[1]=0, global)</text>
+
+  <rect x="310" y="296" width="215" height="22" rx="2" fill="#e8d5f5" stroke="#8e7cc3"/>
+  <text x="417" y="312" text-anchor="middle" font-size="9" fill="#351c75">ESR_EL1 ✓  STTR/LDTR ✓  BLR ✓</text>
+
+  <!-- EL0 zone -->
+  <rect x="45" y="328" width="490" height="60" rx="4" fill="#fce5cd" stroke="#e69138" stroke-width="1"/>
+  <text x="290" y="348" text-anchor="middle" font-weight="bold" font-size="12" fill="#783f04">EL0 — Guest Application</text>
+
+  <rect x="55" y="355" width="210" height="25" rx="3" fill="#fff" stroke="#e69138"/>
+  <text x="160" y="373" text-anchor="middle" font-size="10" fill="#b45f06">Linux ARM64 ELF (musl/busybox/python)</text>
+
+  <rect x="275" y="355" width="120" height="25" rx="3" fill="#fff" stroke="#e69138"/>
+  <text x="335" y="373" text-anchor="middle" font-size="10" fill="#b45f06">TTBR0 per-process</text>
+
+  <rect x="405" y="355" width="120" height="25" rx="3" fill="#fff" stroke="#e69138"/>
+  <text x="465" y="373" text-anchor="middle" font-size="10" fill="#b45f06">VDSO (5ns clock)</text>
+
+  <!-- Gofer -->
+  <rect x="30" y="395" width="250" height="35" rx="4" fill="#d9ead3" stroke="#6aa84f" stroke-width="1"/>
+  <text x="155" y="417" text-anchor="middle" font-weight="bold" font-size="11" fill="#274e13">In-process Gofer (lisafs/directfs)</text>
+
+  <!-- Network -->
+  <rect x="300" y="395" width="250" height="35" rx="4" fill="#d9ead3" stroke="#6aa84f" stroke-width="1"/>
+  <text x="425" y="417" text-anchor="middle" font-weight="bold" font-size="11" fill="#274e13">Netstack (proxy/utun/vmnet)</text>
+
+  <!-- Performance annotation -->
+  <rect x="30" y="440" width="520" height="40" rx="4" fill="#f5f5f5" stroke="#ccc"/>
+  <text x="40" y="456" font-size="10" fill="#333" font-weight="bold">Performance:</text>
+  <text x="130" y="456" font-size="10" fill="#38761d">Fast-path: ~0.1µs</text>
+  <text x="260" y="456" font-size="10" fill="#cc4125">VM exit: ~4µs</text>
+  <text x="370" y="456" font-size="10" fill="#1155cc">Save: ~800ns (lazy FP)</text>
+  <text x="40" y="472" font-size="10" fill="#333">88/88 tests pass | 7/7 stress | 11 in-VM syscalls | Go asm dispatch proven</text>
+</svg>

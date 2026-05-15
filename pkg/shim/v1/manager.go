@@ -188,7 +188,7 @@ func (m *manager) Start(ctx context.Context, id string, opts shim.StartOpts) (sh
 
 // Stop implements shim.Manager.Stop.
 func (manager) Stop(ctx context.Context, id string) (shim.StopStatus, error) {
-	log.L.Debugf("StopShim, id: %v", id)
+	log.L.Infof("StopShim, id: %v", id)
 	path, err := os.Getwd()
 	if err != nil {
 		return shim.StopStatus{}, err
@@ -217,8 +217,7 @@ func (manager) Stop(ctx context.Context, id string) (shim.StopStatus, error) {
 	}, nil
 }
 
-func getRuntimeOptions() *runsc.Options {
-	opts := &runsc.Options{}
+func getEnableGrouping() bool {
 	shimConfigPaths := []string{"/run/containerd/runsc/config.toml", "/etc/containerd/runsc/config.toml"}
 
 	tomlPath := ""
@@ -229,22 +228,15 @@ func getRuntimeOptions() *runsc.Options {
 		}
 	}
 	if len(tomlPath) == 0 {
-		return opts
-	}
-
-	if _, err := toml.DecodeFile(tomlPath, opts); err != nil {
-		log.L.Debugf("Failed to decode shim config file %q: %v", tomlPath, err)
-		return opts
-	}
-
-	return opts
-}
-
-func getEnableGrouping() bool {
-	opts := getRuntimeOptions()
-	if opts == nil {
 		return false
 	}
+
+	var opts runsc.Options
+	if _, err := toml.DecodeFile(tomlPath, &opts); err != nil {
+		log.L.Debugf("Failed to decode shim config file %q: %v", tomlPath, err)
+		return false
+	}
+
 	return opts.Grouping
 }
 

@@ -301,7 +301,7 @@ func (b *Boot) Execute(_ context.Context, f *flag.FlagSet, args ...any) subcomma
 
 	conf := args[0].(*config.Config)
 
-	if hostPageSize := unix.Getpagesize(); hostPageSize != hostarch.PageSize {
+	if hostPageSize := unix.Getpagesize(); hostPageSize != hostarch.PageSize && hostPageSize != 16384 {
 		util.Fatalf("host page size (%d) does not match compiled page size (%d)", hostPageSize, hostarch.PageSize)
 	}
 

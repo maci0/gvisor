@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build linux
+
 package nvproxy
 
 import (
@@ -20,15 +22,6 @@ import (
 	"gvisor.dev/gvisor/pkg/abi/nvgpu"
 	"gvisor.dev/gvisor/pkg/seccomp"
 	"gvisor.dev/gvisor/pkg/sentry/devices/nvproxy/nvconf"
-)
-
-// Shorthands for NVIDIA driver capabilities.
-const (
-	// Shorthand for compute+utility capabilities.
-	// This is the default set of capabilities when capabilities are not
-	// explicitly specified, and using a shorthand for this makes ABI
-	// definitions in `version.go` more readable.
-	compUtil = nvconf.CapCompute | nvconf.CapUtility
 )
 
 func frontendIoctlFilters(enabledCaps nvconf.DriverCaps) []seccomp.SyscallRule {

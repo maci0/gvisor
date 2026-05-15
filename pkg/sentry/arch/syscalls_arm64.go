@@ -61,6 +61,12 @@ func (c *Context64) SyscallArgs() SyscallArguments {
 	}
 }
 
+// SyscallRestoreOrig restores R0 from OrigR0 without rewinding PC.
+// Used by PTRACE_SYSEMU to expose the original first argument to the tracer.
+func (c *Context64) SyscallRestoreOrig() {
+	c.Regs.Regs[0] = uint64(c.OrigR0)
+}
+
 // RestartSyscall implements Context.RestartSyscall.
 // Prepare for system call restart, OrigR0 will be restored to R0.
 // Please see the linux code as reference:

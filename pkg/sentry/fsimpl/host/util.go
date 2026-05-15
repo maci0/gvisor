@@ -20,21 +20,20 @@ import (
 	"gvisor.dev/gvisor/pkg/errors/linuxerr"
 )
 
+// utimeOmit is the Linux UTIME_OMIT constant (not defined on all platforms).
+const utimeOmit = 0x3FFFFFFF
+
 func toTimespec(ts linux.StatxTimestamp, omit bool) unix.Timespec {
 	if omit {
 		return unix.Timespec{
 			Sec:  0,
-			Nsec: unix.UTIME_OMIT,
+			Nsec: utimeOmit,
 		}
 	}
 	return unix.Timespec{
 		Sec:  ts.Sec,
 		Nsec: int64(ts.Nsec),
 	}
-}
-
-func unixToLinuxStatxTimestamp(ts unix.StatxTimestamp) linux.StatxTimestamp {
-	return linux.StatxTimestamp{Sec: ts.Sec, Nsec: ts.Nsec}
 }
 
 func timespecToStatxTimestamp(ts unix.Timespec) linux.StatxTimestamp {
@@ -44,5 +43,13 @@ func timespecToStatxTimestamp(ts unix.Timespec) linux.StatxTimestamp {
 // isBlockError checks if an error is EAGAIN or EWOULDBLOCK.
 // If so, they can be transformed into linuxerr.ErrWouldBlock.
 func isBlockError(err error) bool {
-	return linuxerr.Equals(linuxerr.EAGAIN, err) || linuxerr.Equals(linuxerr.EWOULDBLOCK, err)
+	if linuxerr.Equals(linuxerr.EAGAIN, err) || linuxerr.Equals(linuxerr.EWOULDBLOCK, err) {
+		return true
+	}
+	// On macOS, host syscalls return the native EAGAIN (errno 35),
+	// not the Linux EAGAIN (errno 11) that linuxerr.Equals checks.
+	if err == unix.EAGAIN || err == unix.EWOULDBLOCK {
+		return true
+	}
+	return false
 }

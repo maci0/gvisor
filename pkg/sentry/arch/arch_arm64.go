@@ -32,6 +32,16 @@ import (
 // Host specifies the host architecture.
 const Host = ARM64
 
+// --- 36-bit VA (for HVF on macOS without guest MMU, 64 GB IPA) ---
+const (
+	maxAddr64VA36                hostarch.Addr = 1 << 36
+	maxMmapRand64VA36            hostarch.Addr = (1 << 18) * hostarch.PageSize // ~1GB randomization
+	minMmapRand64VA36            hostarch.Addr = (1 << 14) * hostarch.PageSize // ~64MB min
+	preferredTopDownAllocMinVA36 hostarch.Addr = 0xC00000000                   // ~48 GB, ~75%
+	preferredAllocationGapVA36   hostarch.Addr = 2 << 30                       // 2 GB
+	preferredPIELoadAddrVA36     hostarch.Addr = maxAddr64VA36 / 6 * 5
+)
+
 // --- 39-bit VA (3-level page tables, 512 GB) ---
 const (
 	maxAddr64VA39                hostarch.Addr = 1 << 39
@@ -134,6 +144,13 @@ var (
 //   - KVM:     ConfigureAddressSpace(1 << 48)
 func ConfigureAddressSpace(taskSize uintptr) {
 	switch taskSize {
+	case 1 << 36:
+		maxAddr64 = maxAddr64VA36
+		maxMmapRand64 = maxMmapRand64VA36
+		minMmapRand64 = minMmapRand64VA36
+		preferredTopDownAllocMin = preferredTopDownAllocMinVA36
+		preferredAllocationGap = preferredAllocationGapVA36
+		preferredPIELoadAddr = preferredPIELoadAddrVA36
 	case 1 << 39:
 		maxAddr64 = maxAddr64VA39
 		maxMmapRand64 = maxMmapRand64VA39

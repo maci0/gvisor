@@ -702,10 +702,14 @@ func (t *Task) ptraceSyscallEnter() (taskRunState, bool) {
 		return nil, false
 	case ptraceSyscallIntercept:
 		t.Debugf("Entering syscall-enter-stop from PTRACE_SYSCALL")
+		t.Arch().SyscallRestoreOrig()
 		t.ptraceSyscallStopLocked()
 		return (*runSyscallAfterSyscallEnterStop)(nil), true
 	case ptraceSyscallEmu:
 		t.Debugf("Entering syscall-enter-stop from PTRACE_SYSEMU")
+		// Restore x0 from OrigR0 so the tracer sees the original
+		// first syscall argument, not the -ENOSYS set by doSyscall().
+		t.Arch().SyscallRestoreOrig()
 		t.ptraceSyscallStopLocked()
 		return (*runSyscallAfterSysemuStop)(nil), true
 	}

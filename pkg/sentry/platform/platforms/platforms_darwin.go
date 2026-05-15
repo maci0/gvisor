@@ -1,4 +1,4 @@
-// Copyright 2021 The gVisor Authors.
+// Copyright 2024 The gVisor Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,10 @@
 //go:build darwin
 // +build darwin
 
+// Package platforms imports all available platform packages.
 package platforms
 
-// This file makes the platforms package buildable on Darwin.
+import (
+	// Import platforms available on macOS.
+	_ "gvisor.dev/gvisor/pkg/sentry/platform/hvf"
+)

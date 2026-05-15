@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build linux
+
 package gofer
 
 import (
@@ -634,20 +636,10 @@ func (i *directfsInode) mknod(ctx context.Context, name string, creds *auth.Cred
 		return i.bindAt(ctx, name, creds, opts, d)
 	}
 
-	// Only allow creating regular files or overlayfs whiteouts. Linux's
-	// vfs_mknod() exempts whiteouts from the CAP_MKNOD check, so we do not need
-	// CAP_MKNOD on the gofer process. This enables using gofer as an overlay
-	// upper layer. Return EPERM otherwise; from mknod(2) man page:
+	// From mknod(2) man page:
 	// "EPERM: [...] if the filesystem containing pathname does not support
 	// the type of node requested."
-	switch opts.Mode.FileType() {
-	case linux.S_IFREG:
-	case linux.S_IFCHR:
-		if opts.DevMajor == 0 && opts.DevMinor == 0 {
-			break
-		}
-		fallthrough
-	default:
+	if opts.Mode.FileType() != linux.ModeRegular {
 		return nil, unix.EPERM
 	}
 

@@ -15,19 +15,8 @@
 package platform
 
 import (
-	"fmt"
-	"os"
-	"strconv"
-	"strings"
-
 	"gvisor.dev/gvisor/pkg/hostarch"
 )
-
-// systemMMapMinAddrSource is the source file.
-const systemMMapMinAddrSource = "/proc/sys/vm/mmap_min_addr"
-
-// systemMMapMinAddr is the system's minimum map address.
-var systemMMapMinAddr uint64
 
 // SystemMMapMinAddr returns the minimum system address.
 func SystemMMapMinAddr() hostarch.Addr {
@@ -37,24 +26,9 @@ func SystemMMapMinAddr() hostarch.Addr {
 // MMapMinAddr is a size zero struct that implements MinUserAddress based on
 // the system minimum address. It is suitable for embedding in platforms that
 // rely on the system mmap, and thus require the system minimum.
-type MMapMinAddr struct {
-}
+type MMapMinAddr struct{}
 
 // MinUserAddress implements platform.MinUserAddresss.
 func (*MMapMinAddr) MinUserAddress() hostarch.Addr {
 	return SystemMMapMinAddr()
-}
-
-func init() {
-	// Open the source file.
-	b, err := os.ReadFile(systemMMapMinAddrSource)
-	if err != nil {
-		panic(fmt.Sprintf("couldn't open %s: %v", systemMMapMinAddrSource, err))
-	}
-
-	// Parse the result.
-	systemMMapMinAddr, err = strconv.ParseUint(strings.TrimSpace(string(b)), 10, 64)
-	if err != nil {
-		panic(fmt.Sprintf("couldn't parse %s from %s: %v", string(b), systemMMapMinAddrSource, err))
-	}
 }

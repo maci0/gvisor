@@ -19,6 +19,7 @@ package kvm
 
 import (
 	"fmt"
+	"os"
 
 	"golang.org/x/sys/unix"
 	"gvisor.dev/gvisor/pkg/ring0"
@@ -140,7 +141,12 @@ func inKernelMode() bool {
 }
 
 func init() {
-	// Install the handler.
+	// Only install the KVM bluepill signal handler if /dev/kvm exists.
+	// When running inside gVisor (no /dev/kvm), the handler intercepts
+	// SIGSEGV from other code and crashes with "invalid state".
+	if _, err := os.Stat("/dev/kvm"); err != nil {
+		return
+	}
 	if err := sighandling.ReplaceSignalHandler(bluepillSignal, addrOfSighandler(), &savedHandler); err != nil {
 		panic(fmt.Sprintf("Unable to set handler for signal %d: %v", bluepillSignal, err))
 	}

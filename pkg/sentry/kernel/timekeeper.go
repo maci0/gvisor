@@ -16,6 +16,7 @@ package kernel
 
 import (
 	"fmt"
+	"runtime"
 	"time"
 
 	"gvisor.dev/gvisor/pkg/atomicbitops"
@@ -202,7 +203,14 @@ func (t *Timekeeper) startUpdater(params *VDSOParamPage) {
 
 				var p vdsoParams
 				if monotonicOk {
-					p.monotonicReady = 1
+					// On macOS/HVF, CNTVCT_EL0 at EL0 inside the VM
+					// returns a frozen value within a single execution
+					// slice. Disable the VDSO monotonic fast path so
+					// clock_gettime falls through to the syscall, which
+					// reads the host clock and always returns fresh values.
+					if runtime.GOOS != "darwin" {
+						p.monotonicReady = 1
+					}
 					p.monotonicBaseCycles = int64(monotonicParams.BaseCycles)
 					p.monotonicBaseRef = int64(monotonicParams.BaseRef) + t.monotonicOffset
 					p.monotonicFrequency = monotonicParams.Frequency

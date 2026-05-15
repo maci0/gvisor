@@ -33,8 +33,18 @@ OUTPUT_FORMAT("elf64-littleaarch64", "elf64-bigaarch64", "elf64-littleaarch64")
 OUTPUT_ARCH(aarch64)
 
 SECTIONS {
-  /* The parameter page is mapped just before the VDSO. */
-  _params = VDSO_PRELINK - 0x1000;
+  /*
+   * The parameter page is mapped just before the VDSO.
+   *
+   * The offset must match hostarch.PageSize: 0x1000 for 4K pages (Linux),
+   * 0x4000 for 16K pages (macOS ARM64). The gVisor loader maps a single
+   * page-sized param page immediately before the VDSO binary.
+   *
+   * On macOS ARM64, PageSize=16384 (0x4000), so _params must be
+   * VDSO_PRELINK - 0x4000 for the PC-relative adr instruction in the
+   * VDSO text to land at the start of the param page.
+   */
+  _params = VDSO_PRELINK - 0x4000;
 
   . = VDSO_PRELINK + SIZEOF_HEADERS;
 

@@ -9,8 +9,11 @@ go_library(
     name = "hostmm",
     srcs = [
         "cgroup.go",
+        "cgroup_darwin.go",
         "hostmm.go",
+        "hostmm_darwin.go",
         "membarrier.go",
+        "membarrier_darwin.go",
     ],
     visibility = ["//pkg/sentry:internal"],
     deps = [

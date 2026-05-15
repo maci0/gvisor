@@ -120,6 +120,8 @@ go_library(
         "fsutil.go",
         "mapping_set.go",
         "maps_mutex.go",
+        "mmap_compat_darwin.go",
+        "mmap_compat_linux.go",
         "mmap_cached_file.go",
         "mmap_file.go",
         "mmap_file_state.go",

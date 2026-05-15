@@ -79,7 +79,7 @@ func nonblockingPipeHasWriter(fd int32) (bool, error) {
 	tempPipeMu.Lock()
 	defer tempPipeMu.Unlock()
 	// Copy 1 byte from fd into the temporary pipe.
-	n, err := unix.Tee(int(fd), tempPipeWriteFD, 1, unix.SPLICE_F_NONBLOCK)
+	n, err := teeFile(int(fd), tempPipeWriteFD, 1, 0x2 /* SPLICE_F_NONBLOCK */)
 	if linuxerr.Equals(linuxerr.EAGAIN, err) {
 		// The pipe represented by fd is empty, but has a writer.
 		return true, nil

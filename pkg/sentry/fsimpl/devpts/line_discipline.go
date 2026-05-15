@@ -486,10 +486,27 @@ type inputQueueTransformer struct{}
 //   - l.termiosMu must be held for reading.
 //   - q.mu must be held.
 func (*inputQueueTransformer) transform(l *lineDiscipline, q *queue, buf []byte) (int, bool) {
-	// If there's a line waiting to be read in canonical mode, don't write
-	// anything else to the read buffer.
+	// In canonical mode with a pending line, the process isn't reading
+	// stdin. Consume everything to prevent the wait buffer from growing
+	// unbounded, but only act on signal characters. Non-signal bytes
+	// are dead input — they'd never be read while the line is pending.
 	if l.termios.LEnabled(linux.ICANON) && q.readable {
-		return 0, false
+		if !l.termios.LEnabled(linux.ISIG) {
+			return len(buf), false
+		}
+		for i := 0; i < len(buf); {
+			size := l.peek(buf[i:])
+			switch buf[i] {
+			case l.termios.ControlCharacters[linux.VINTR]:
+				l.terminal.replicaKTTY.SignalForegroundProcessGroup(kernel.SignalInfoPriv(linux.SIGINT))
+			case l.termios.ControlCharacters[linux.VSUSP]:
+				l.terminal.replicaKTTY.SignalForegroundProcessGroup(kernel.SignalInfoPriv(linux.SIGTSTP))
+			case l.termios.ControlCharacters[linux.VQUIT]:
+				l.terminal.replicaKTTY.SignalForegroundProcessGroup(kernel.SignalInfoPriv(linux.SIGQUIT))
+			}
+			i += size
+		}
+		return len(buf), false
 	}
 
 	maxBytes := nonCanonMaxBytes

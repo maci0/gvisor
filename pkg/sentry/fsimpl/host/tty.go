@@ -67,14 +67,51 @@ func (t *TTYFileDescription) PRead(ctx context.Context, dst usermem.IOSequence, 
 // Reading from a TTY is only allowed for foreground process groups. Background
 // process groups will either get EIO or a SIGTTIN.
 func (t *TTYFileDescription) Read(ctx context.Context, dst usermem.IOSequence, opts vfs.ReadOptions) (int64, error) {
-	// Are we allowed to do the read?
-	// drivers/tty/n_tty.c:n_tty_read()=>job_control()=>tty_check_change().
 	if err := t.TTY().CheckChange(ctx, linux.SIGTTIN); err != nil {
 		return 0, err
 	}
 
-	// Do the read.
-	return t.fileDescription.Read(ctx, dst, opts)
+	// Read into a temporary buffer first so we can inspect for signal chars.
+	t.inode.termiosMu.Lock()
+	isig := t.inode.termios.LEnabled(linux.ISIG)
+	vintr := t.inode.termios.ControlCharacters[linux.VINTR]
+	vquit := t.inode.termios.ControlCharacters[linux.VQUIT]
+	vsusp := t.inode.termios.ControlCharacters[linux.VSUSP]
+	t.inode.termiosMu.Unlock()
+
+	if !isig {
+		return t.fileDescription.Read(ctx, dst, opts)
+	}
+
+	// Read into temp buffer, scan for signal characters, then copy to dst.
+	buf := make([]byte, dst.NumBytes())
+	tmpDst := usermem.BytesIOSequence(buf)
+	n, err := t.fileDescription.Read(ctx, tmpDst, opts)
+	if n <= 0 {
+		return n, err
+	}
+
+	// Check each byte for signal characters.
+	for i := int64(0); i < n; i++ {
+		switch buf[i] {
+		case vintr:
+			t.TTY().SignalForegroundProcessGroup(&linux.SignalInfo{Signo: int32(linux.SIGINT)})
+			return 0, linuxerr.ErrInterrupted
+		case vquit:
+			t.TTY().SignalForegroundProcessGroup(&linux.SignalInfo{Signo: int32(linux.SIGQUIT)})
+			return 0, linuxerr.ErrInterrupted
+		case vsusp:
+			t.TTY().SignalForegroundProcessGroup(&linux.SignalInfo{Signo: int32(linux.SIGTSTP)})
+			return 0, linuxerr.ErrInterrupted
+		}
+	}
+
+	// No signal chars — copy to real destination.
+	copied, copyErr := dst.CopyOut(ctx, buf[:n])
+	if copyErr != nil {
+		return int64(copied), copyErr
+	}
+	return int64(copied), err
 }
 
 // PWrite implements vfs.FileDescriptionImpl.PWrite.
@@ -102,7 +139,35 @@ func (t *TTYFileDescription) Write(ctx context.Context, src usermem.IOSequence, 
 			return 0, err
 		}
 	}
+	if t.inode.termios.OEnabled(linux.OPOST) && t.inode.termios.OEnabled(linux.ONLCR) {
+		return t.writeWithONLCR(ctx, src, opts)
+	}
 	return t.fileDescription.Write(ctx, src, opts)
+}
+
+func (t *TTYFileDescription) writeWithONLCR(ctx context.Context, src usermem.IOSequence, opts vfs.WriteOptions) (int64, error) {
+	buf := make([]byte, src.NumBytes())
+	n, err := src.CopyIn(ctx, buf)
+	if err != nil {
+		return 0, err
+	}
+	buf = buf[:n]
+
+	var out []byte
+	for i, b := range buf {
+		if b == '\n' && (i == 0 || buf[i-1] != '\r') {
+			out = append(out, '\r', '\n')
+		} else {
+			out = append(out, b)
+		}
+	}
+
+	writer := usermem.BytesIOSequence(out)
+	_, werr := t.fileDescription.Write(ctx, writer, opts)
+	if werr != nil {
+		return 0, werr
+	}
+	return int64(n), nil
 }
 
 // Ioctl implements vfs.FileDescriptionImpl.Ioctl.
@@ -128,19 +193,17 @@ func (t *TTYFileDescription) Ioctl(ctx context.Context, io usermem.IO, sysno uin
 		return 0, err
 
 	case linux.TCGETS:
-		termios, err := ioctlGetTermios(fd)
-		if err != nil {
-			return 0, err
-		}
-		_, err = termios.CopyOut(task, args[2].Pointer())
+		t.inode.termiosMu.Lock()
+		termios := t.inode.termios.ToTermios()
+		t.inode.termiosMu.Unlock()
+		_, err := termios.CopyOut(task, args[2].Pointer())
 		return 0, err
 
 	case linux.TCGETS2:
-		termios, err := ioctlGetTermios2(fd)
-		if err != nil {
-			return 0, err
-		}
-		_, err = termios.CopyOut(task, args[2].Pointer())
+		t.inode.termiosMu.Lock()
+		kt := t.inode.termios
+		t.inode.termiosMu.Unlock()
+		_, err := kt.CopyOut(task, args[2].Pointer())
 		return 0, err
 
 	case linux.TCSETS, linux.TCSETSW, linux.TCSETSF:

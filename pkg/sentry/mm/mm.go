@@ -49,6 +49,15 @@ import (
 	"gvisor.dev/gvisor/pkg/sentry/vfs"
 )
 
+// page4KMode enables 4K page size emulation on 16K-page hosts.
+var page4KMode bool
+
+// SetPage4KMode enables 4K page emulation.
+func SetPage4KMode(enabled bool) { page4KMode = enabled }
+
+// Page4KMode returns whether 4K page emulation is active.
+func Page4KMode() bool { return page4KMode }
+
 // MapsCallbackFunc has all the parameters required for populating an entry of /proc/[pid]/maps.
 type MapsCallbackFunc func(start, end hostarch.Addr, permissions hostarch.AccessType, private string, offset uint64, devMajor, devMinor uint32, inode uint64, path string)
 

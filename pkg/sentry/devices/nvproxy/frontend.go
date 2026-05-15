@@ -612,8 +612,8 @@ func rmAllocOSDescriptor(fi *frontendIoctlState, ioctlParams *nvgpu.IoctlNVOS02P
 			}
 			for !ims.IsEmpty() {
 				im := ims.Head()
-				if _, _, errno := unix.RawSyscall6(unix.SYS_MREMAP, im.Addr(), 0 /* old_size */, uintptr(im.Len()), linux.MREMAP_MAYMOVE|linux.MREMAP_FIXED, sentryAddr, 0); errno != 0 {
-					return 0, errno
+				if err := mremap(im.Addr(), 0 /* old_size */, uintptr(im.Len()), mremapFlags(), sentryAddr); err != nil {
+					return 0, err
 				}
 				sentryAddr += uintptr(im.Len())
 				ims = ims.Tail()
@@ -640,9 +640,9 @@ func rmAllocOSDescriptor(fi *frontendIoctlState, ioctlParams *nvgpu.IoctlNVOS02P
 		// To avoid this, fault in these pages via MADV_POPULATE_WRITE;
 		// mm/madvise.c:madvise_populate() => mm/gup.c:faultin_page_range()
 		// does pass FOLL_UNLOCKABLE to __get_user_pages_locked().
-		if _, _, errno := unix.Syscall(unix.SYS_MADVISE, m, uintptr(arLen), unix.MADV_POPULATE_WRITE); errno != 0 {
+		if err := madvisePopulateWrite(m, uintptr(arLen)); err != nil {
 			if !madvPopulateWriteDisabled.Swap(true) {
-				log.Infof("nvproxy: disabling MADV_POPULATE_WRITE before NV01_MEMORY_SYSTEM_OS_DESCRIPTOR allocation: %s", errno)
+				log.Infof("nvproxy: disabling MADV_POPULATE_WRITE before NV01_MEMORY_SYSTEM_OS_DESCRIPTOR allocation: %s", err)
 			}
 		}
 	}

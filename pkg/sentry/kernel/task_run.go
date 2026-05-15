@@ -236,11 +236,23 @@ func (app *runApp) execute(t *Task) taskRunState {
 		t.tg.pidns.owner.mu.RUnlock()
 	}
 
+	// Sync signal mask to platform state page for in-VM sigprocmask.
+	if sm, ok := t.p.(platform.SignalMasker); ok {
+		sm.SetCachedSignalMask(uint64(t.SignalMask()))
+	}
+
 	region := trace.StartRegion(t.traceContext, runRegion)
 	t.accountTaskGoroutineEnter(TaskGoroutineRunningApp)
 	info, at, err := t.p.Switch(t, t.MemoryManager(), t.Arch(), t.rseqCPU)
 	t.accountTaskGoroutineLeave(TaskGoroutineRunningApp)
 	region.End()
+
+	// Sync signal mask back from platform state page.
+	if sm, ok := t.p.(platform.SignalMasker); ok {
+		if newMask, dirty := sm.GetCachedSignalMask(); dirty {
+			t.SetSignalMask(linux.SignalSet(newMask))
+		}
+	}
 
 	if clearSinglestep {
 		t.Arch().ClearSingleStep()

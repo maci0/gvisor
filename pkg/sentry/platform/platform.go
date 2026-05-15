@@ -299,6 +299,14 @@ type Context interface {
 	LastCPUNumber() int32
 }
 
+// SignalMasker is optionally implemented by Context to sync the
+// signal mask for in-VM rt_sigprocmask handling. Platforms that
+// handle sigprocmask inside the VM (e.g., HVF) implement this.
+type SignalMasker interface {
+	SetCachedSignalMask(mask uint64)
+	GetCachedSignalMask() (mask uint64, dirty bool)
+}
+
 // LastCPUNumber implements Context.LastCPUNumber.
 func (NoCPUNumbers) LastCPUNumber() int32 {
 	panic("context does not support last CPU number")

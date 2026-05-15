@@ -92,9 +92,6 @@ const (
 	// hostPTYHostFD is the FD number on the host that is passed to the sandbox.
 	// FDs passed via ExtraFiles start at 3.
 	hostPTYHostFD = 3
-
-	// uniqueXMLSuffix is the suffix for individual per-testcase XML outputs.
-	uniqueXMLSuffix = ".unique.xml"
 )
 
 // getSetupContainerPath returns the path to the setup_container binary.
@@ -107,27 +104,6 @@ func getSetupContainerPath() string {
 		fatalf("cannot find setup_container: %v", err)
 	}
 	return setupContainer
-}
-
-func removeShardAndXMLEnvVars(env []string, tc *gtest.TestCase) []string {
-	// Remove shard env variables so that the gunit binary does not try to
-	// interpret them.
-	excludeVars := []string{"TEST_SHARD_INDEX", "TEST_TOTAL_SHARDS", "GTEST_SHARD_INDEX", "GTEST_TOTAL_SHARDS"}
-	if !*oneSandbox {
-		// When running multiple sandboxes/sub-processes, strip any existing XML output variables to
-		// ensure the sub-processes do not repeatedly overwrite the shared location.
-		excludeVars = append(excludeVars, "XML_OUTPUT_FILE", "GUNIT_OUTPUT", "GTEST_OUTPUT")
-	}
-	env = filterEnv(env, excludeVars)
-	if !*oneSandbox {
-		// Provide a dynamically generated, unique output file path for each test case execution
-		// so their individual C++ metadata and results are preserved. They will be collated later.
-		if origXML, ok := unix.Getenv("XML_OUTPUT_FILE"); ok && len(origXML) > 0 {
-			safeName := strings.ReplaceAll(tc.Name, "/", "_")
-			env = append(env, fmt.Sprintf("XML_OUTPUT_FILE=%s.%s%s", origXML, safeName, uniqueXMLSuffix))
-		}
-	}
-	return env
 }
 
 // runTestCaseNative runs the test case directly on the host machine.
@@ -155,7 +131,9 @@ func runTestCaseNative(testBin string, tc *gtest.TestCase, args []string, t *tes
 	if !found {
 		env = append(env, newEnvVar)
 	}
-	env = removeShardAndXMLEnvVars(env, tc)
+	// Remove shard env variables so that the gunit binary does not try to
+	// interpret them.
+	env = filterEnv(env, []string{"TEST_SHARD_INDEX", "TEST_TOTAL_SHARDS", "GTEST_SHARD_INDEX", "GTEST_TOTAL_SHARDS"})
 
 	if *addHostUDS {
 		socketDir, cleanup, err := uds.CreateBoundUDSTree("/tmp")
@@ -1012,7 +990,10 @@ func runTestCaseRunsc(testBin string, tc *gtest.TestCase, args []string, t *test
 	} else {
 		env = append(env, saveVar+"=FALSE")
 	}
-	env = removeShardAndXMLEnvVars(env, tc)
+
+	// Remove shard env variables so that the gunit binary does not try to
+	// interpret them.
+	env = filterEnv(env, []string{"TEST_SHARD_INDEX", "TEST_TOTAL_SHARDS", "GTEST_SHARD_INDEX", "GTEST_TOTAL_SHARDS"})
 
 	// Set TEST_TMPDIR to testTmpDir, which has been appropriately configured.
 	env = filterEnv(env, []string{"TEST_TMPDIR"})
@@ -1173,60 +1154,7 @@ func main() {
 		}
 	}
 
-	// When oneSandbox=false, we need to collate the XMLs produced by each individual test case.
-	if !*oneSandbox {
-		if origXML, ok := unix.Getenv("XML_OUTPUT_FILE"); ok && len(origXML) > 0 {
-			tests = append(tests, testing.InternalTest{
-				Name: "FakeTestForNotOneSandbox_CollateXML",
-				F: func(t *testing.T) {
-					if err := collateXMLs(origXML); err != nil {
-						t.Fatalf("Failed to collate XML files: %v", err)
-					}
-				},
-			})
-		}
-	}
-
 	testing.Main(matchString, tests, nil, nil)
-}
-
-func collateXMLs(origXML string) error {
-	matches, err := filepath.Glob(origXML + ".*" + uniqueXMLSuffix)
-	if err != nil {
-		return fmt.Errorf("failed to glob individual XML files: %v", err)
-	}
-	if len(matches) == 0 {
-		return nil
-	}
-
-	f, err := os.Create(origXML)
-	if err != nil {
-		return fmt.Errorf("failed to create collated XML file %s: %v", origXML, err)
-	}
-	defer f.Close()
-	fmt.Fprintln(f, `<?xml version="1.0" encoding="UTF-8"?><testsuites name="AllTests"><testsuite name="Collated">`)
-
-	for _, m := range matches {
-		data, err := os.ReadFile(m)
-		if err != nil {
-			return fmt.Errorf("failed to read unique XML file %s: %v", m, err)
-		}
-		s := string(data)
-		start := strings.Index(s, "<testcase")
-		end := strings.LastIndex(s, "</testcase>")
-
-		if start >= 0 && end >= 0 {
-			fmt.Fprintln(f, s[start:end+len("</testcase>")])
-		} else if start >= 0 {
-			end = strings.Index(s[start:], "/>")
-			if end >= 0 {
-				fmt.Fprintln(f, s[start:start+end+2])
-			}
-		}
-	}
-
-	fmt.Fprintln(f, `</testsuite></testsuites>`)
-	return nil
 }
 
 func enableAllTraces(dir string) (string, error) {

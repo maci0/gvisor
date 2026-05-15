@@ -94,6 +94,10 @@ type contextInterface interface {
 	// SyscallSaveOrig save original register value.
 	SyscallSaveOrig()
 
+	// SyscallRestoreOrig restores the first syscall argument register
+	// from the saved original value without rewinding PC.
+	SyscallRestoreOrig()
+
 	// SyscallArgs returns the syscall arguments in an array.
 	SyscallArgs() SyscallArguments
 

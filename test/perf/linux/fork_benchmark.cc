@@ -14,8 +14,6 @@
 
 #include <unistd.h>
 
-#include <csignal>
-
 #include "gtest/gtest.h"
 #include "absl/synchronization/barrier.h"
 #include "benchmark/benchmark.h"
@@ -133,12 +131,6 @@ void SwitchChild(int readfd, int writefd) {
   }
 }
 
-void SwitchSetup(const benchmark::State& state) {
-  // Ignore SIGPIPE so that WriteFd inside SwitchChild generates EPIPE
-  // instead of a SIGPIPE that terminates the process.
-  TEST_PCHECK(signal(SIGPIPE, SIG_IGN) != SIG_ERR);
-}
-
 // Send bytes in a loop through a series of pipes, each passing through a
 // different process.
 //
@@ -231,7 +223,7 @@ void BM_ProcessSwitch(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BM_ProcessSwitch)->Setup(SwitchSetup)->Range(2, 16)->UseRealTime();
+BENCHMARK(BM_ProcessSwitch)->Range(2, 16)->UseRealTime();
 
 // Equivalent to BM_ThreadSwitch using threads instead of processes.
 void BM_ThreadSwitch(benchmark::State& state) {
@@ -291,7 +283,7 @@ void BM_ThreadSwitch(benchmark::State& state) {
   // to exit its loop and close its FDs, and so on until all threads exit.
 }
 
-BENCHMARK(BM_ThreadSwitch)->Setup(SwitchSetup)->Range(2, 16)->UseRealTime();
+BENCHMARK(BM_ThreadSwitch)->Range(2, 16)->UseRealTime();
 
 void BM_ThreadStart(benchmark::State& state) {
   const int num_threads = state.range(0);

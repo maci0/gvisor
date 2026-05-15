@@ -405,7 +405,7 @@ const (
 	vllmPodName          = "vllm-server"
 	vllmServiceName      = "vllm-service"
 	vllmBenchImage       = k8s.ImageRepoPrefix + "tpu/vllm_x86_64:latest"
-	vllmBenchClientImage = k8s.ImageRepoPrefix + "gpu/ollama/client_x86_64:latest"
+	vllmBenchClientImage = k8s.ImageRepoPrefix + "gpu/sglang/client_x86_64:latest"
 )
 
 func newVLLMServerPod(namespace *testcluster.Namespace, image string) *v13.Pod {

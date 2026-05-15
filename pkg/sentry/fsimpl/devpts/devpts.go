@@ -372,6 +372,36 @@ func (i *rootInode) DecRef(ctx context.Context) {
 	i.rootInodeRefs.DecRef(func() { i.Destroy(ctx) })
 }
 
+// PTYInfo returns the PTY index and replica kernel.TTY from a PTY master
+// FileDescription. Returns ok=false if fd is not a PTY master.
+func PTYInfo(fd *vfs.FileDescription) (index uint32, replicaTTY *kernel.TTY, ok bool) {
+	mfd, ok := fd.Impl().(*masterFileDescription)
+	if !ok {
+		return 0, nil, false
+	}
+	return mfd.t.n, mfd.t.replicaKTTY, true
+}
+
+// SetWindowSize sets the PTY window size directly from a master
+// FileDescription, without requiring Task context. Delivers SIGWINCH
+// to the foreground process group if the size actually changed.
+func SetWindowSize(fd *vfs.FileDescription, rows, cols uint16) {
+	mfd, ok := fd.Impl().(*masterFileDescription)
+	if !ok {
+		return
+	}
+	mfd.t.ld.sizeMu.Lock()
+	oldSize := mfd.t.ld.size
+	mfd.t.ld.size = linux.WindowSize{
+		Rows: rows,
+		Cols: cols,
+	}
+	mfd.t.ld.sizeMu.Unlock()
+	if oldSize.Rows != rows || oldSize.Cols != cols {
+		mfd.t.replicaKTTY.SignalForegroundProcessGroup(kernel.SignalInfoPriv(linux.SIGWINCH))
+	}
+}
+
 // +stateify savable
 type implStatFS struct{}
 

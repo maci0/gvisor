@@ -37,6 +37,22 @@ func Brk(t *kernel.Task, sysno uintptr, args arch.SyscallArguments) (uintptr, *k
 }
 
 // Mmap implements Linux syscall mmap(2).
+// page4KRound rounds a 4K-aligned address and length to 16K boundaries
+// for the mm layer. Returns the adjusted address, length, offset delta.
+func page4KRound(addr hostarch.Addr, length uint64, offset uint64) (hostarch.Addr, uint64, uint64) {
+	aligned := addr & ^hostarch.Addr(hostarch.PageSize-1)
+	delta := uint64(addr - aligned)
+	newLen := (length + delta + uint64(hostarch.PageSize-1)) & ^uint64(hostarch.PageSize-1)
+	// Adjust offset back by delta to maintain addr-offset relationship.
+	// If offset < delta, the mapping starts before the file — clamp to 0
+	// and let the mm layer zero-fill the gap.
+	var newOffset uint64
+	if offset >= delta {
+		newOffset = offset - delta
+	}
+	return aligned, newLen, newOffset
+}
+
 func Mmap(t *kernel.Task, sysno uintptr, args arch.SyscallArguments) (uintptr, *kernel.SyscallControl, error) {
 	prot := args[2].Int()
 	flags := args[3].Int()
@@ -137,13 +153,58 @@ func Mmap(t *kernel.Task, sysno uintptr, args arch.SyscallArguments) (uintptr, *
 		opts.NameMut = memmap.NameMutAnon
 	}
 
+	// In page4K mode, round addresses/lengths to 16K for the mm layer.
+	if mm.Page4KMode() {
+		// Sub-16K PROT_NONE MAP_FIXED: guest is placing a 4K guard page.
+		// Don't create a 16K VMA (would clobber adjacent memory).
+		// Return success without creating a VMA — the page table has
+		// no entry for this range, so accesses fault as intended.
+		if opts.Fixed && !opts.Perms.Any() && opts.Length < uint64(hostarch.PageSize) {
+			return uintptr(opts.Addr), nil, nil
+		}
+		// Round addr to 16K if 4K-aligned but not 16K-aligned.
+		if opts.Addr&0xFFF == 0 && opts.Addr&hostarch.Addr(hostarch.PageSize-1) != 0 {
+			newAddr, newLen, newOff := page4KRound(opts.Addr, opts.Length, opts.Offset)
+			opts.Addr = newAddr
+			opts.Length = newLen
+			if opts.Mappable != nil {
+				opts.Offset = newOff
+			}
+		}
+		// Round length up to 16K for the mm layer's VMA alignment.
+		if opts.Length > 0 && opts.Length < uint64(hostarch.PageSize) {
+			opts.Length = uint64(hostarch.PageSize)
+		}
+	}
+
 	rv, err := t.MemoryManager().MMap(t, opts)
 	return uintptr(rv), nil, err
 }
 
 // Munmap implements linux syscall munmap(2).
 func Munmap(t *kernel.Task, sysno uintptr, args arch.SyscallArguments) (uintptr, *kernel.SyscallControl, error) {
-	return 0, nil, t.MemoryManager().MUnmap(t, args[0].Pointer(), args[1].Uint64())
+	addr := args[0].Pointer()
+	length := args[1].Uint64()
+	// In page4K mode, round inward to 16K boundaries to avoid
+	// unmapping adjacent memory that the caller didn't intend.
+	if mm.Page4KMode() && addr&0xFFF == 0 {
+		if addr&hostarch.Addr(hostarch.PageSize-1) != 0 {
+			// Round start UP to next 16K boundary.
+			newAddr := (addr + hostarch.Addr(hostarch.PageSize-1)) & ^hostarch.Addr(hostarch.PageSize-1)
+			delta := uint64(newAddr - addr)
+			if delta >= length {
+				return 0, nil, nil // sub-16K unmap, no-op
+			}
+			length -= delta
+			addr = newAddr
+		}
+		// Round length DOWN to 16K.
+		length = length & ^uint64(hostarch.PageSize-1)
+		if length == 0 {
+			return 0, nil, nil
+		}
+	}
+	return 0, nil, t.MemoryManager().MUnmap(t, addr, length)
 }
 
 // Mremap implements linux syscall mremap(2).
@@ -182,13 +243,28 @@ func Mremap(t *kernel.Task, sysno uintptr, args arch.SyscallArguments) (uintptr,
 
 // Mprotect implements linux syscall mprotect(2).
 func Mprotect(t *kernel.Task, sysno uintptr, args arch.SyscallArguments) (uintptr, *kernel.SyscallControl, error) {
+	addr := args[0].Pointer()
 	length := args[1].Uint64()
 	prot := args[2].Int()
-	err := t.MemoryManager().MProtect(args[0].Pointer(), length, hostarch.AccessType{
+	perms := hostarch.AccessType{
 		Read:    linux.PROT_READ&prot != 0,
 		Write:   linux.PROT_WRITE&prot != 0,
 		Execute: linux.PROT_EXEC&prot != 0,
-	}, linux.PROT_GROWSDOWN&prot != 0)
+	}
+	// In page4K mode, round to 16K boundaries.
+	if mm.Page4KMode() && addr&0xFFF == 0 {
+		// Skip sub-16K PROT_NONE mprotects (guard pages).
+		if !perms.Any() && length < uint64(hostarch.PageSize) {
+			return 0, nil, nil
+		}
+		if addr&hostarch.Addr(hostarch.PageSize-1) != 0 {
+			addr, length, _ = page4KRound(addr, length, 0)
+		}
+		if length > 0 && length < uint64(hostarch.PageSize) {
+			length = uint64(hostarch.PageSize)
+		}
+	}
+	err := t.MemoryManager().MProtect(addr, length, perms, linux.PROT_GROWSDOWN&prot != 0)
 	return 0, nil, err
 }
 

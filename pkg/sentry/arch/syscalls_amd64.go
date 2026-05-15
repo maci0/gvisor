@@ -26,6 +26,9 @@ const restartSyscallNr = uintptr(219)
 func (c *Context64) SyscallSaveOrig() {
 }
 
+// SyscallRestoreOrig restores the original register value. Noop on x86.
+func (c *Context64) SyscallRestoreOrig() {}
+
 // SyscallNo returns the syscall number according to the 64-bit convention.
 func (c *Context64) SyscallNo() uintptr {
 	return uintptr(c.Regs.Orig_rax)

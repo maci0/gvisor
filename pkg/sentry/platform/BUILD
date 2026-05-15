@@ -12,6 +12,8 @@ go_library(
         "cpuid_amd64.go",
         "cpuid_arm64.go",
         "mmap_min_addr.go",
+        "mmap_min_addr_darwin.go",
+        "mmap_min_addr_linux.go",
         "platform.go",
     ],
     visibility = ["//pkg/sentry:internal"],

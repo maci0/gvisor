@@ -19,14 +19,18 @@ go_template_instance(
 go_library(
     name = "host",
     srcs = [
+        "compat_darwin.go",
+        "compat_linux.go",
         "host.go",
         "host_unsafe.go",
         "inode_refs.go",
         "ioctl_unsafe.go",
+        "ioctl_unsafe_darwin.go",
         "save_restore.go",
         "tty.go",
         "util.go",
         "util_unsafe.go",
+        "util_unsafe_darwin.go",
     ],
     visibility = ["//pkg/sentry:internal"],
     deps = [

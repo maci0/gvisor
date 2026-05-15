@@ -54,9 +54,11 @@ func (fs FeatureSet) Intersect(allowedFeatures map[Feature]struct{}) (FeatureSet
 // Must run before syscall filter installation. This value is used to create
 // the fake /proc/cpuinfo from a FeatureSet.
 func initCPUInfo() {
+	if runtime.GOOS == "darwin" {
+		initCPUInfoDarwin()
+		return
+	}
 	if runtime.GOOS != "linux" {
-		// Don't try to read Linux-specific /proc files or
-		// warn about them not existing.
 		return
 	}
 	cpuinfob, err := os.ReadFile("/proc/cpuinfo")
@@ -155,6 +157,25 @@ func initCPUInfo() {
 				log.Warningf("Could not parse CPU revision value %v: %v", splitRev[1], err)
 			}
 		}
+	}
+}
+
+func initCPUInfoDarwin() {
+	hostFeatureSet.cpuImplHex = 0x61 // Apple
+	hostFeatureSet.cpuArchDec = 8    // ARMv8
+	hostFeatureSet.cpuPartHex = 0x022
+	hostFeatureSet.cpuVarHex = 0x1
+	hostFeatureSet.cpuRevDec = 0
+	hostFeatureSet.cpuFreqMHz = 48.00
+
+	// Apple Silicon supports these ARM features.
+	hostFeatureSet.hwCap = hwCap{
+		hwCap1: HWCAP_FP | HWCAP_ASIMD | HWCAP_AES | HWCAP_PMULL |
+			HWCAP_SHA1 | HWCAP_SHA2 | HWCAP_CRC32 | HWCAP_ATOMICS |
+			HWCAP_FPHP | HWCAP_ASIMDHP | HWCAP_ASIMDRDM | HWCAP_JSCVT |
+			HWCAP_FCMA | HWCAP_LRCPC | HWCAP_DCPOP | HWCAP_SHA3 |
+			HWCAP_ASIMDDP | HWCAP_SHA512 | HWCAP_FLAGM | HWCAP_SSBS |
+			HWCAP_DIT | HWCAP_ILRCPC | HWCAP_ASIMDFHM,
 	}
 }
 

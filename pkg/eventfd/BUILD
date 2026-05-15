@@ -9,7 +9,10 @@ go_library(
     name = "eventfd",
     srcs = [
         "eventfd.go",
+        "eventfd_darwin.go",
+        "eventfd_linux.go",
         "eventfd_unsafe.go",
+        "eventfd_unsafe_darwin.go",
     ],
     visibility = [
         "//:sandbox",

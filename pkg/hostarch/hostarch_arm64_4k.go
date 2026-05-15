@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build arm64 && !pagesize_64k
+//go:build arm64 && !pagesize_64k && !darwin
 
 package hostarch
 
@@ -30,7 +30,10 @@ const (
 )
 
 func init() {
-	if size := unix.Getpagesize(); size != PageSize {
-		println("WARNING: host page size mismatch - running on non-4K host")
+	// Accept both 4K and 16K page sizes. On macOS gVisor (16K pages),
+	// guest binaries compiled for 4K still work because the sentry
+	// rounds up mmap requests to the host page size.
+	if size := unix.Getpagesize(); size != PageSize && size != 16384 {
+		println("WARNING: host page size mismatch")
 	}
 }

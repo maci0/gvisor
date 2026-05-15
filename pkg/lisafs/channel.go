@@ -36,6 +36,13 @@ var (
 // accounts for a large region of shared memory.
 // TODO(gvisor.dev/issue/6313): Tune the number of channels.
 func maxChannels() int {
+	// On macOS, disable flipcall channels. The fdchannel's
+	// SOCK_STREAM FD passing causes the gofer to deadlock during
+	// heavy page faulting (e.g., libcrypto relocation). All RPCs
+	// use the socket communicator instead.
+	if runtime.GOOS == "darwin" {
+		return 0
+	}
 	maxChans := runtime.GOMAXPROCS(0)
 	if maxChans < 2 {
 		maxChans = 2
@@ -114,15 +121,18 @@ func (c *Connection) createChannel(maxMessageSize uint32) (*channel, flipcall.Pa
 	// Set up data channel.
 	desc, err := c.channelAlloc.Allocate(flipcall.PacketHeaderBytes + int(chanHeaderLen+maxMessageSize))
 	if err != nil {
+		log.Warningf("createChannel: Allocate failed: %v", err)
 		return nil, flipcall.PacketWindowDescriptor{}, -1, err
 	}
 	if err := ch.data.Init(flipcall.ServerSide, desc); err != nil {
+		log.Warningf("createChannel: Init failed: %v", err)
 		return nil, flipcall.PacketWindowDescriptor{}, -1, err
 	}
 
 	// Set up FD channel.
 	fdSocks, err := fdchannel.NewConnectedSockets()
 	if err != nil {
+		log.Warningf("createChannel: NewConnectedSockets failed: %v", err)
 		ch.data.Destroy()
 		return nil, flipcall.PacketWindowDescriptor{}, -1, err
 	}

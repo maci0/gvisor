@@ -25,7 +25,6 @@ import (
 	"strings"
 	"syscall"
 
-	"golang.org/x/sys/unix"
 	"gvisor.dev/gvisor/pkg/abi/linux"
 )
 
@@ -536,19 +535,16 @@ func StatToAttr(s *syscall.Stat_t, req AttrMask) (Attr, AttrMask) {
 		attr.GID = GID(s.Gid)
 	}
 	if req.RDev {
-		attr.RDev = s.Dev
+		attr.RDev = uint64(s.Dev)
 	}
 	if req.ATime {
-		attr.ATimeSeconds = uint64(s.Atim.Sec)
-		attr.ATimeNanoSeconds = uint64(s.Atim.Nsec)
+		attr.ATimeSeconds, attr.ATimeNanoSeconds = statAtime(s)
 	}
 	if req.MTime {
-		attr.MTimeSeconds = uint64(s.Mtim.Sec)
-		attr.MTimeNanoSeconds = uint64(s.Mtim.Nsec)
+		attr.MTimeSeconds, attr.MTimeNanoSeconds = statMtime(s)
 	}
 	if req.CTime {
-		attr.CTimeSeconds = uint64(s.Ctim.Sec)
-		attr.CTimeNanoSeconds = uint64(s.Ctim.Nsec)
+		attr.CTimeSeconds, attr.CTimeNanoSeconds = statCtime(s)
 	}
 	if req.Size {
 		attr.Size = uint64(s.Size)
@@ -580,13 +576,13 @@ type AllocateMode struct {
 // ToAllocateMode returns an AllocateMode from a fallocate(2) mode.
 func ToAllocateMode(mode uint64) AllocateMode {
 	return AllocateMode{
-		KeepSize:      mode&unix.FALLOC_FL_KEEP_SIZE != 0,
-		PunchHole:     mode&unix.FALLOC_FL_PUNCH_HOLE != 0,
-		NoHideStale:   mode&unix.FALLOC_FL_NO_HIDE_STALE != 0,
-		CollapseRange: mode&unix.FALLOC_FL_COLLAPSE_RANGE != 0,
-		ZeroRange:     mode&unix.FALLOC_FL_ZERO_RANGE != 0,
-		InsertRange:   mode&unix.FALLOC_FL_INSERT_RANGE != 0,
-		Unshare:       mode&unix.FALLOC_FL_UNSHARE_RANGE != 0,
+		KeepSize:      mode&fallocKeepSize != 0,
+		PunchHole:     mode&fallocPunchHole != 0,
+		NoHideStale:   mode&fallocNoHideStale != 0,
+		CollapseRange: mode&fallocCollapseRange != 0,
+		ZeroRange:     mode&fallocZeroRange != 0,
+		InsertRange:   mode&fallocInsertRange != 0,
+		Unshare:       mode&fallocUnshareRange != 0,
 	}
 }
 
@@ -594,25 +590,25 @@ func ToAllocateMode(mode uint64) AllocateMode {
 func (a *AllocateMode) ToLinux() uint32 {
 	rv := uint32(0)
 	if a.KeepSize {
-		rv |= unix.FALLOC_FL_KEEP_SIZE
+		rv |= fallocKeepSize
 	}
 	if a.PunchHole {
-		rv |= unix.FALLOC_FL_PUNCH_HOLE
+		rv |= fallocPunchHole
 	}
 	if a.NoHideStale {
-		rv |= unix.FALLOC_FL_NO_HIDE_STALE
+		rv |= fallocNoHideStale
 	}
 	if a.CollapseRange {
-		rv |= unix.FALLOC_FL_COLLAPSE_RANGE
+		rv |= fallocCollapseRange
 	}
 	if a.ZeroRange {
-		rv |= unix.FALLOC_FL_ZERO_RANGE
+		rv |= fallocZeroRange
 	}
 	if a.InsertRange {
-		rv |= unix.FALLOC_FL_INSERT_RANGE
+		rv |= fallocInsertRange
 	}
 	if a.Unshare {
-		rv |= unix.FALLOC_FL_UNSHARE_RANGE
+		rv |= fallocUnshareRange
 	}
 	return rv
 }

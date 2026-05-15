@@ -63,6 +63,10 @@ func (e AlignmentError) Error() string {
 	return fmt.Sprintf("address %#x is not aligned to a %d-byte boundary", e.Addr, e.Alignment)
 }
 
+// platformInit is set by platform-specific init() functions
+// (e.g., safecopy_darwin.go) to install alternative fault handlers.
+var platformInit func()
+
 var (
 	// The begin and end addresses below are for the functions that are
 	// checked by the signal handler.
@@ -134,6 +138,16 @@ func initializeAddresses() {
 
 func init() {
 	initializeAddresses()
+	if runtime.GOOS == "darwin" {
+		// macOS ARM64 sigreturn uses PAC tokens that prevent modified
+		// mcontext register restoration. The Mach exception handler
+		// (installed via platformInit) bypasses this by using
+		// thread_set_state from a separate thread.
+		if platformInit != nil {
+			platformInit()
+		}
+		return
+	}
 	if err := sighandling.ReplaceSignalHandler(unix.SIGSEGV, addrOfSignalHandler(), &savedSigSegVHandler); err != nil {
 		panic(fmt.Sprintf("Unable to set handler for SIGSEGV: %v", err))
 	}

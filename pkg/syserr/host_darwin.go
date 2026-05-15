@@ -34,6 +34,12 @@ func getHostTranslation(err unix.Errno) *Error {
 	return darwinHostTranslations[err]
 }
 
+func init() {
+	// Map macOS-specific errnos to their nearest Linux equivalents.
+	// ENOATTR (93) on macOS = ENODATA on Linux (no extended attribute).
+	darwinHostTranslations[93] = ErrNoDataAvailable
+}
+
 // TODO(gvisor.dev/issue/1270): We currently only add translations for errors
 // that exist both on Darwin and Linux.
 func addHostTranslation(host unix.Errno, trans *Error) {

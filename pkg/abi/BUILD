@@ -9,6 +9,7 @@ go_library(
     name = "abi",
     srcs = [
         "abi.go",
+        "abi_darwin.go",
         "abi_linux.go",
         "flag.go",
     ],

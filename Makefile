@@ -323,7 +323,7 @@ cos-gpu-smoke-tests: gpu-smoke-images $(RUNTIME_BIN)
 gpu-images: gpu-smoke-images load-gpu_pytorch load-gpu_ollama load-gpu_ollama_client load-basic_busybox load-basic_alpine load-basic_python load-gpu_stable-diffusion-xl load-gpu_vllm load-gpu_nccl-tests load-benchmarks_ffmpeg
 .PHONY: gpu-images
 
-l4-gpu-images: load-gpu_sglang load-gpu_triton load-gpu_ollama_client
+l4-gpu-images: load-gpu_sglang load-gpu_sglang_client load-gpu_triton load-gpu_triton_client
 .PHONY: l4-gpu-images
 
 l4-gpu-tests: l4-gpu-images $(RUNTIME_BIN)
@@ -358,7 +358,7 @@ cos-gpu-all-tests: gpu-images cos-gpu-smoke-tests $(RUNTIME_BIN)
 .PHONY: cos-gpu-all-tests
 
 # Images needed for TPU tests.
-tpu-images: load-tpu_vllm load-gpu_ollama_client
+tpu-images: load-tpu_vllm load-gpu_sglang_client
 .PHONY: tpu-images
 
 tpu-vllm-tests: tpu-images $(RUNTIME_BIN)

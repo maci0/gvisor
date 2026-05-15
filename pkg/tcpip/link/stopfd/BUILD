@@ -9,6 +9,7 @@ go_library(
     name = "stopfd",
     srcs = [
         "stopfd.go",
+        "stopfd_darwin.go",
     ],
     visibility = ["//visibility:public"],
     deps = [

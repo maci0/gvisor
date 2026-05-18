@@ -458,11 +458,12 @@ func (i *inode) Stat(ctx context.Context, vfsfs *vfs.Filesystem, opts vfs.StatOp
 
 	// Apply virtual owner overrides.
 	if i.virtualOwner.enabled {
+		mode := i.virtualOwner.atomicMode()
 		if s.Mask&linux.STATX_TYPE != 0 {
-			s.Mode = (s.Mode & linux.S_IFMT) | (uint16(i.virtualOwner.atomicMode()) &^ linux.S_IFMT)
+			s.Mode = (s.Mode &^ linux.S_IFMT) | (uint16(mode) & linux.S_IFMT)
 		}
 		if s.Mask&linux.STATX_MODE != 0 {
-			s.Mode = (s.Mode & linux.S_IFMT) | (uint16(i.virtualOwner.atomicMode()) &^ linux.S_IFMT)
+			s.Mode = (s.Mode & linux.S_IFMT) | (uint16(mode) &^ linux.S_IFMT)
 		}
 		if s.Mask&linux.STATX_UID != 0 {
 			s.UID = i.virtualOwner.atomicUID()

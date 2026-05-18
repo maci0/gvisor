@@ -644,11 +644,16 @@ type allocState struct {
 //
 // Preconditions:
 //   - length > 0.
-//   - length must be page-aligned.
+//   - length must be guest-page-aligned. It is rounded up to host page
+//     alignment internally.
 //   - If opts.Hugepage == true, length must be hugepage-aligned.
 func (f *MemoryFile) Allocate(length uint64, opts AllocOpts) (memmap.FileRange, error) {
-	if length == 0 || !hostarch.IsPageAligned(length) || (opts.Huge && !hostarch.IsHugePageAligned(length)) {
+	if length == 0 || !hostarch.IsGuestPageAligned(length) || (opts.Huge && !hostarch.IsHugePageAligned(length)) {
 		panic(fmt.Sprintf("invalid allocation length: %#x", length))
+	}
+	origLength := length
+	if r := length % hostarch.PageSize; r != 0 {
+		length += hostarch.PageSize - r
 	}
 
 	alloc := allocState{
@@ -750,7 +755,8 @@ func (f *MemoryFile) Allocate(length uint64, opts AllocOpts) (memmap.FileRange, 
 				return memmap.FileRange{}, err
 			}
 		}
-		n, err := safemem.ReadFullToBlocks(alloc.opts.ReaderFunc, dsts)
+		readerDsts := dsts.TakeFirst64(origLength)
+		n, err := safemem.ReadFullToBlocks(alloc.opts.ReaderFunc, readerDsts)
 		un := uint64(hostarch.Addr(n).RoundDown())
 		if un < length {
 			// Free unused memory and update fr to contain only the memory that is
@@ -1142,7 +1148,7 @@ func (f *MemoryFile) HasUniqueRef(fr memmap.FileRange) bool {
 
 // IncRef implements memmap.File.IncRef.
 func (f *MemoryFile) IncRef(fr memmap.FileRange, memCgID uint32) {
-	if !fr.WellFormed() || fr.Length() == 0 || !hostarch.IsPageAligned(fr.Start) || !hostarch.IsPageAligned(fr.End) {
+	if !fr.WellFormed() || fr.Length() == 0 || !hostarch.IsGuestPageAligned(fr.Start) || !hostarch.IsGuestPageAligned(fr.End) {
 		panic(fmt.Sprintf("invalid range: %v", fr))
 	}
 
@@ -1172,7 +1178,7 @@ func (f *MemoryFile) incRefLocked(fr memmap.FileRange) {
 
 // DecRef implements memmap.File.DecRef.
 func (f *MemoryFile) DecRef(fr memmap.FileRange) {
-	if !fr.WellFormed() || fr.Length() == 0 || !hostarch.IsPageAligned(fr.Start) || !hostarch.IsPageAligned(fr.End) {
+	if !fr.WellFormed() || fr.Length() == 0 || !hostarch.IsGuestPageAligned(fr.Start) || !hostarch.IsGuestPageAligned(fr.End) {
 		panic(fmt.Sprintf("invalid range: %v", fr))
 	}
 

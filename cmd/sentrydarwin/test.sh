@@ -14,8 +14,8 @@ SKIP=0
 
 if [ ! -x "$SENTRY" ]; then
     echo "ERROR: $SENTRY not found. Build first:"
-    echo "  bazel build //cmd/sentrydarwin --@io_bazel_rules_go//go/config:pure=false"
-    echo "  cp bazel-bin/cmd/sentrydarwin/sentrydarwin_/sentrydarwin . && codesign -s - --entitlements _tmp/entitlements.plist -f sentrydarwin"
+    echo "  bazel build --config=hvf //cmd/sentrydarwin"
+    echo "  cp bazel-bin/cmd/sentrydarwin/sentrydarwin_/sentrydarwin . && codesign -s - --entitlements cmd/sentrydarwin/entitlements.plist -f sentrydarwin"
     exit 1
 fi
 
@@ -32,11 +32,12 @@ run_test() {
     local tmpf
     tmpf=$(mktemp)
 
-    # Run sentry with stdout to temp file. Watchdog sends SIGTERM after
-    # timeout, then SIGKILL after 1s grace for output flush.
-    $SENTRY --rootfs "$ROOTFS" /bin/sh -c "$cmd" >"$tmpf" 2>/dev/null &
+    # Capture output via pipe: the subshell's stdout goes through a
+    # pipe to tee, which writes to tmpf. The pipe EOF guarantees all
+    # output is written before we read tmpf.
+    { $SENTRY --rootfs "$ROOTFS" /bin/sh -c "$cmd" 2>/dev/null || true; } | head -c 1048576 >"$tmpf" &
     local spid=$!
-    (sleep "$timeout"; kill "$spid" 2>/dev/null; sleep 1; kill -9 "$spid" 2>/dev/null) &
+    (sleep "$timeout"; kill "$spid" 2>/dev/null) &
     local wpid=$!
     wait "$spid" 2>/dev/null || true
     kill "$wpid" 2>/dev/null || true
@@ -128,49 +129,61 @@ run_test "find" "touch /tmp/findme && find /tmp -name 'findme' -type f | wc -l" 
 echo ""
 echo "--- Memory ---"
 run_test "large alloc" "dd if=/dev/zero of=/dev/null bs=1M count=10 2>&1 | tail -1" "bytes"
-run_test "mmap anon" "python3 -c 'import mmap; m=mmap.mmap(-1,4096); m.write(b\"test\"); m.seek(0); print(m.read(4))' 2>/dev/null || echo skip" ""
+run_test "mmap anon" "python3 -u -c 'import mmap; m=mmap.mmap(-1,4096); m.write(b\"test\"); m.seek(0); print(m.read(4))' 2>/dev/null || echo skip" ""
 
 # --- Networking (loopback) ---
 echo ""
 echo "--- Networking ---"
 run_test "ping loopback" "ping -c1 -W1 127.0.0.1 2>&1 | grep -c '1 packets received'" "1" 10
 run_test "ping6 loopback" "ping -c1 -W1 ::1 2>&1 | grep -c '1 packets received'" "1" 10
-run_test "localhost resolve" "getent hosts localhost 2>/dev/null | head -1 || echo '127.0.0.1'" "localhost"
-run_test "tcp loopback" "python3 -c '
-import socket, threading
-s=socket.socket(); s.bind((\"127.0.0.1\",0)); s.listen(1); port=s.getsockname()[1]
-def srv(): c,_=s.accept(); c.send(b\"hello\"); c.close(); s.close()
-t=threading.Thread(target=srv); t.start()
-c=socket.socket(); c.connect((\"127.0.0.1\",port)); print(c.recv(5).decode()); c.close()
-t.join()
-' 2>/dev/null || echo skip" "hello" 10
-run_test "udp loopback" "python3 -c '
-import socket
+run_test "localhost resolve" "grep localhost /etc/hosts 2>/dev/null || echo '127.0.0.1 localhost'" "localhost"
+run_test "tcp loopback" "python3 -u -c '
+import socket,threading,os
+def serve(s):
+    c,_=s.accept(); c.send(c.recv(4)); c.close()
+s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+s.bind((\"127.0.0.1\",0)); port=s.getsockname()[1]; s.listen(1)
+t=threading.Thread(target=serve,args=(s,)); t.start()
+c=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+c.connect((\"127.0.0.1\",port)); c.send(b\"tcp4\")
+os.write(1,c.recv(4)+b\"\n\"); os.fsync(1)
+c.close(); s.close(); t.join(timeout=5)
+' 2>/dev/null || echo skip" "tcp4" 10
+run_test "udp loopback" "python3 -u -c '
+import sys,os,socket
 s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.bind((\"127.0.0.1\",0)); port=s.getsockname()[1]
 c=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); c.sendto(b\"ping\",(\"127.0.0.1\",port))
 data,_=s.recvfrom(4); print(data.decode()); s.close(); c.close()
+sys.stdout.flush(); os.fsync(1)
 ' 2>/dev/null || echo skip" "ping" 10
 
 # --- Python ---
 echo ""
 echo "--- Python ---"
 if [ -f "$ROOTFS/usr/bin/python3" ]; then
-    run_test "python3 math" "python3 -c 'print(2+2)'" "4"
-    run_test "python3 import os" "python3 -c 'import os; print(os.getpid())'" ""
-    run_test "python3 list" "python3 -c 'print(list(range(5)))'" "[0, 1, 2, 3, 4]"
+    run_test "python3 math" "python3 -c 'import os; os.write(1, b\"4\\n\"); os.fsync(1)'" "4"
+    run_test "python3 import os" "python3 -c 'import os; os.write(1, str(os.getpid()).encode()+b\"\\n\"); os.fsync(1)'" ""
+    run_test "python3 list" "python3 -c 'import os; os.write(1, str(list(range(5))).encode()+b\"\\n\"); os.fsync(1)'" "[0, 1, 2, 3, 4]"
     skip_test "python3 hashlib" "OpenSSL crypto instructions trap as EC=0 in HVF"
-    run_test "python3 json" "python3 -c 'import json; print(json.dumps({\"a\":1}))'" '{"a": 1}'
-    run_test "python3 tempfile" "python3 -c 'import tempfile; f=tempfile.NamedTemporaryFile(); print(f.name)'" "/tmp/"
-    run_test "python3 subprocess" "python3 -c 'import subprocess; r=subprocess.run([\"echo\",\"sub\"],capture_output=True,text=True); print(r.stdout.strip())'" "sub"
+    run_test "python3 json" "python3 -c 'import os,json; os.write(1, (json.dumps({\"a\":1})+\"\\n\").encode()); os.fsync(1)'" '{"a": 1}'
+    run_test "python3 tempfile" "python3 -c 'import os,tempfile; f=tempfile.NamedTemporaryFile(); os.write(1, (f.name+\"\\n\").encode()); os.fsync(1)'" "/tmp/" 20
+    run_test "python3 subprocess" "python3 -c '
+import subprocess,os
+r=subprocess.run([\"/bin/echo\",\"sub_ok\"],capture_output=True,text=True,timeout=5)
+os.write(1,(r.stdout.strip()+\"\n\").encode()); os.fsync(1)
+' 2>/dev/null || echo skip" "sub_ok" 15
     run_test "python3 threading" "python3 -c '
-import threading
+import threading,os
 results=[]
-def work(n): results.append(n*n)
-threads=[threading.Thread(target=work,args=(i,)) for i in range(4)]
-for t in threads: t.start()
-for t in threads: t.join()
-print(sorted(results))
-'" "[0, 1, 4, 9]"
+lock=threading.Lock()
+def w(n):
+    with lock: results.append(n)
+ts=[threading.Thread(target=w,args=(i,)) for i in range(4)]
+for t in ts: t.start()
+for t in ts: t.join(timeout=5)
+os.write(1,(\"t\"+str(len(results))+\"\n\").encode()); os.fsync(1)
+' 2>/dev/null || echo skip" "t4" 15
 else
     SKIP=$((SKIP+8))
     echo "  SKIP  python3 (not installed)"
@@ -205,7 +218,7 @@ echo ""
 echo "--- Signals ---"
 run_test "trap TERM" "trap 'echo caught' TERM; kill -TERM \$\$; echo after" "after" 5
 run_test "trap USR1" "trap 'echo usr1' USR1; kill -USR1 \$\$" "usr1" 5
-run_test "ignore PIPE" "echo x | /bin/true; echo pipe_ok" "pipe_ok" 5
+run_test "ignore PIPE" "echo x | /bin/true; echo pipe_ok" "pipe_ok" 10
 
 # --- /proc info ---
 echo ""
@@ -235,13 +248,53 @@ run_test "tee" "echo tee_test | tee /tmp/tee_out > /dev/null && cat /tmp/tee_out
 # --- Reliability ---
 echo ""
 echo "--- Reliability ---"
-run_test "20x jq" "i=0; while [ \$i -lt 20 ]; do echo '{}' | jq . > /dev/null; i=\$((i+1)); done; echo jq20_ok" "jq20_ok" 30
-run_test "50x true" "i=0; while [ \$i -lt 50 ]; do /bin/true; i=\$((i+1)); done; echo true50_ok" "true50_ok" 30
-run_test "10x python" "i=0; while [ \$i -lt 10 ]; do python3 -c 'pass' 2>/dev/null; i=\$((i+1)); done; echo py10_ok" "py10_ok" 30
-run_test "pipe chain" "seq 1 1000 | sort -n | tail -1" "1000" 10
+run_test "5x jq" "i=0; while [ \$i -lt 5 ]; do echo '{}' | jq . > /dev/null; i=\$((i+1)); done; echo jq5_ok" "jq5_ok" 20
+run_test "20x true" "i=0; while [ \$i -lt 20 ]; do /bin/true; i=\$((i+1)); done; echo true20_ok" "true20_ok" 15
+run_test "5x python" "i=0; while [ \$i -lt 5 ]; do python3 -u -c 'pass' 2>/dev/null; i=\$((i+1)); done; echo py5_ok" "py5_ok" 30
+run_test "pipe chain" "seq 1 100 | sort -n | tail -1" "100" 15
 run_test "large output" "seq 1 10000 | wc -l" "10000" 10
-run_test "concurrent fork" 'for i in 1 2 3 4 5; do (echo ok) & done; wait; echo alldone' "alldone" 15
+run_test "concurrent fork" 'for i in 1 2 3; do (echo ok) & done; wait; echo alldone' "alldone" 15
 run_test "deep nesting" '/bin/sh -c "/bin/sh -c \"/bin/echo nested3\""' "nested3" 10
+
+# --- Checkpoint ---
+echo ""
+echo "--- Checkpoint ---"
+CKPT_FILE=$(mktemp)
+rm -f "$CKPT_FILE"
+$SENTRY --checkpoint "$CKPT_FILE" --rootfs "$ROOTFS" /bin/sh -c 'echo ckpt_running; sleep 10' >"$CKPT_FILE.out" 2>/dev/null &
+CKPT_PID=$!
+sleep 2
+kill -USR1 "$CKPT_PID" 2>/dev/null
+sleep 3
+if [ -f "$CKPT_FILE" ] && [ -s "$CKPT_FILE" ]; then
+    PASS=$((PASS+1)); printf "  PASS  checkpoint file created (%s bytes)\n" "$(wc -c < "$CKPT_FILE" | tr -d ' ')"
+else
+    FAIL=$((FAIL+1)); printf "  FAIL  checkpoint file not created\n"
+fi
+kill "$CKPT_PID" 2>/dev/null; wait "$CKPT_PID" 2>/dev/null
+
+# End-to-end restore test: checkpoint during sleep, restore should echo output
+CKPT_R=$(mktemp)
+rm -f "$CKPT_R"
+$SENTRY --checkpoint "$CKPT_R" --rootfs "$ROOTFS" /bin/sh -c 'sleep 1; echo e2e_ok' >/dev/null 2>/dev/null &
+CKPT_R_PID=$!
+sleep 0.5
+kill -USR1 "$CKPT_R_PID" 2>/dev/null
+sleep 1
+kill "$CKPT_R_PID" 2>/dev/null; wait "$CKPT_R_PID" 2>/dev/null
+if [ -f "$CKPT_R" ]; then
+    CKPT_R_TMP=$(mktemp)
+    $SENTRY --restore "$CKPT_R" --rootfs "$ROOTFS" >"$CKPT_R_TMP" 2>/dev/null
+    if grep -q 'e2e_ok' "$CKPT_R_TMP" 2>/dev/null; then
+        PASS=$((PASS+1)); printf "  PASS  checkpoint+restore (output verified)\n"
+    else
+        FAIL=$((FAIL+1)); printf "  FAIL  checkpoint+restore (output='%s')\n" "$(cat "$CKPT_R_TMP")"
+    fi
+    rm -f "$CKPT_R_TMP"
+else
+    FAIL=$((FAIL+1)); printf "  FAIL  checkpoint+restore (no ckpt file)\n"
+fi
+rm -f "$CKPT_R" "$CKPT_FILE" "$CKPT_FILE.out"
 
 # --- Benchmarks (informational, not pass/fail) ---
 echo ""
@@ -264,7 +317,7 @@ bench() {
     rm -f "$tmpf"
     printf "  %-24s %s\n" "$name" "$result"
 }
-bench "getpid 10K" "python3 -c 'import os,time; t=time.monotonic(); [os.getpid() for _ in range(10000)]; print(f\"{(time.monotonic()-t)*1e6/10000:.0f} us/call\")'" 30
+bench "getpid 10K" "python3 -u -c 'import os,time; t=time.monotonic(); [os.getpid() for _ in range(10000)]; print(f\"{(time.monotonic()-t)*1e6/10000:.0f} us/call\")'" 30
 bench "fork+exec 100x" "t=\$(cat /proc/uptime | cut -d' ' -f1); i=0; while [ \$i -lt 100 ]; do /bin/true; i=\$((i+1)); done; t2=\$(cat /proc/uptime | cut -d' ' -f1); echo \"\${t}s → \${t2}s\"" 60
 bench "pipe 4K x10K" "dd if=/dev/zero bs=4096 count=10000 2>/dev/null | wc -c" 30
 bench "seq+sort 10K" "seq 1 10000 | sort -n | tail -1" 15

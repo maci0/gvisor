@@ -126,7 +126,21 @@ func (mm *MemoryManager) getPMAsLocked(ctx context.Context, vseg vmaIterator, ar
 		end = ar.End.RoundDown()
 		alignerr = linuxerr.EFAULT
 	}
-	ar = hostarch.AddrRange{ar.Start.RoundDown(), end}
+	start := ar.Start.RoundDown()
+	// When GuestPageSize < PageSize, RoundDown may extend start
+	// before the VMA. Clamp to VMA boundaries.
+	if hostarch.GuestPageSize < hostarch.PageSize {
+		if start < vseg.Start() {
+			start = vseg.Start()
+		}
+		if end > vseg.End() {
+			end = vseg.End()
+		}
+	}
+	ar = hostarch.AddrRange{start, end}
+	if ar.Length() == 0 {
+		return pmaIterator{}, mm.pmas.LowerBoundGap(ar.Start), alignerr
+	}
 
 	pstart, pend, perr := mm.getPMAsInternalLocked(ctx, vseg, ar, at, callerIndirectCommit)
 	if pend.Start() <= ar.Start {
@@ -323,7 +337,7 @@ func (mm *MemoryManager) getPMAsInternalLocked(ctx context.Context, vseg vmaIter
 					// hugepage-backed, the caller won't commit every allocated
 					// page since hugeMaskAR is ar expanded to huge alignment,
 					// unless only one page in optAR falls into the huge page.
-					if callerIndirectCommit && (huge || allocAR.Length() == hostarch.PageSize) {
+					if callerIndirectCommit && (huge || allocAR.Length() <= hostarch.PageSize) {
 						allocOpts.Mode = pgalloc.AllocateCallerIndirectCommit
 					}
 					fr, err := mm.mf.Allocate(uint64(allocAR.Length()), allocOpts)
@@ -331,7 +345,7 @@ func (mm *MemoryManager) getPMAsInternalLocked(ctx context.Context, vseg vmaIter
 						return pstart, pgap, err
 					}
 					if checkInvariants {
-						if !fr.WellFormed() || fr.Length() != uint64(allocAR.Length()) {
+						if !fr.WellFormed() || fr.Length() < uint64(allocAR.Length()) {
 							panic(fmt.Sprintf("Allocate(%v) returned invalid FileRange %v", allocAR.Length(), fr))
 						}
 					}
@@ -353,6 +367,9 @@ func (mm *MemoryManager) getPMAsInternalLocked(ctx context.Context, vseg vmaIter
 					// Other mappings get pmas by translating.
 					optMR := vseg.mappableRangeOf(optAR)
 					reqAR := optAR.Intersect(ar)
+					if reqAR.Length() == 0 {
+						break pmaLoop
+					}
 					reqMR := vseg.mappableRangeOf(reqAR)
 					perms := at
 					if vma.private {
@@ -482,7 +499,9 @@ func (mm *MemoryManager) getPMAsInternalLocked(ctx context.Context, vseg vmaIter
 					// Replace the pma with a copy in the part of the address
 					// range where copying was successful. This doesn't change
 					// RSS.
-					copyAR.End = copyAR.Start + hostarch.Addr(fr.Length())
+					if fr.Length() < uint64(copyAR.Length()) {
+						copyAR.End = copyAR.Start + hostarch.Addr(fr.Length())
+					}
 					if copyAR != pseg.Range() {
 						pseg = mm.pmas.Isolate(pseg, copyAR)
 						pstart = pmaIterator{} // iterators invalidated
@@ -532,6 +551,10 @@ func (mm *MemoryManager) getPMAsInternalLocked(ctx context.Context, vseg vmaIter
 					optAR := pseg.Range()
 					optMR := vseg.mappableRangeOf(optAR)
 					reqAR := optAR.Intersect(ar)
+					if reqAR.Length() == 0 {
+						pseg, pgap = pseg.NextNonEmpty()
+						continue
+					}
 					reqMR := vseg.mappableRangeOf(reqAR)
 					perms := oldpma.translatePerms.Union(at)
 					ts, err := vma.mappable.Translate(ctx, reqMR, optMR, perms)
@@ -639,7 +662,7 @@ func (mm *MemoryManager) isPMACopyOnWriteLocked(vseg vmaIterator, pseg pmaIterat
 	// ownership of it instead of copying. If we do hold the only reference,
 	// additional references can only be taken by mm.Fork(), which is excluded
 	// by mm.activeMu, so this isn't racy.
-	if mm.mf.HasUniqueRef(pseg.fileRange()) {
+	if pma.file == mm.mf && mm.mf.HasUniqueRef(pseg.fileRange()) {
 		pma.needCOW = false
 		// pma.private => pma.translatePerms == hostarch.AnyAccess
 		vma := vseg.ValuePtr()

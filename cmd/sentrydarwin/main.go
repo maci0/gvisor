@@ -29,6 +29,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"sync/atomic"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -52,6 +53,8 @@ import (
 	"gvisor.dev/gvisor/pkg/sentry/fsimpl/proc"
 	"gvisor.dev/gvisor/pkg/sentry/fsimpl/tmpfs"
 	"gvisor.dev/gvisor/pkg/sentry/inet"
+	pkgcontext "gvisor.dev/gvisor/pkg/context"
+	"gvisor.dev/gvisor/pkg/sentry/checkpoint"
 	"gvisor.dev/gvisor/pkg/sentry/kernel"
 	"gvisor.dev/gvisor/pkg/sentry/kernel/auth"
 	"gvisor.dev/gvisor/pkg/sentry/limits"
@@ -87,6 +90,7 @@ import (
 	"gvisor.dev/gvisor/pkg/unet"
 	"gvisor.dev/gvisor/pkg/usermem"
 	"gvisor.dev/gvisor/pkg/waiter"
+	"gvisor.dev/gvisor/pkg/lisafs"
 	"gvisor.dev/gvisor/runsc/fsgofer"
 )
 
@@ -108,6 +112,8 @@ var (
 	flagPage16K    = flag.Bool("page16k", false, "use 16K guest pages (macOS native)")
 	flagProfile    = flag.String("profile", "", "write per-Switch() timing stats to file")
 	flagMachMemory = flag.Bool("mach-memory", false, "use Mach anonymous memory for MemoryFile")
+	flagCheckpoint = flag.String("checkpoint", "", "save checkpoint to path on SIGUSR1")
+	flagRestore    = flag.String("restore", "", "restore kernel state from checkpoint file")
 )
 
 func main() {
@@ -120,7 +126,7 @@ func main() {
 		}
 	}
 	flag.Parse()
-	if flag.NArg() < 1 {
+	if flag.NArg() < 1 && *flagRestore == "" {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <linux-elf> [args...]\n", os.Args[0])
 		os.Exit(1)
 	}
@@ -159,7 +165,6 @@ func main() {
 	// 4K guest pages (default). Linux ARM64 universally uses 4K pages.
 	// --page16k overrides to macOS-native 16K if needed.
 	if *flagPage4K && !*flagPage16K {
-		loader.SetPage4KMode(true)
 		mm.SetPage4KMode(true)
 		log.Infof("4K guest pages enabled (AT_PAGESZ=4096)")
 	}
@@ -292,6 +297,12 @@ func main() {
 	}
 	defer hostFS.DecRef(k.SupervisorContext())
 	k.SetHostMount(vfsObj.NewDisconnectedMount(hostFS, nil, &vfs.MountOptions{}))
+
+	// Restore from checkpoint if --restore is set.
+	if *flagRestore != "" {
+		restoreFromCheckpoint(k, plat, *flagRestore, *flagRootfs)
+		return
+	}
 
 	// Create root filesystem. When --rootfs is set, use a gofer filesystem
 	// backed by an in-process lisafs server for host directory passthrough.
@@ -458,11 +469,17 @@ func main() {
 
 			var f *vfs.FileDescription
 			if isTTY && stdinFile != nil && hostFD > 0 {
+				unix.Close(newFD)
 				f = stdinFile
 				f.IncRef()
 			} else {
 				f, err = host.NewFD(ctx, k.HostMount(), newFD, &host.NewFDOptions{
-					IsTTY: isTTY,
+					IsTTY:      isTTY,
+					Savable:    true,
+					Restorable: true,
+					RestoreKey: checkpoint.ResourceID{
+						Path: fmt.Sprintf("stdio:%d", hostFD),
+					},
 				})
 				if err != nil {
 					unix.Close(newFD)
@@ -553,8 +570,9 @@ func main() {
 	}
 
 	// Forward host signals to the guest.
+	var checkpointing atomic.Bool
 	sigCh := make(chan os.Signal, 4)
-	signal.Notify(sigCh, unix.SIGINT, unix.SIGTERM, unix.SIGHUP, unix.SIGWINCH, unix.SIGALRM)
+	signal.Notify(sigCh, unix.SIGINT, unix.SIGTERM, unix.SIGHUP, unix.SIGWINCH, unix.SIGALRM, unix.SIGUSR1)
 	go func() {
 		for sig := range sigCh {
 			s := sig.(unix.Signal)
@@ -567,6 +585,13 @@ func main() {
 				} else {
 					k.SendExternalSignal(&linux.SignalInfo{Signo: int32(s)}, "host")
 					k.TaskSet().Kill(linux.WaitStatusTerminationSignal(linux.Signal(s)))
+				}
+			case unix.SIGUSR1:
+				if *flagCheckpoint != "" && !checkpointing.Swap(true) {
+					if err := saveCheckpoint(k, *flagCheckpoint); err != nil {
+						log.Warningf("Checkpoint failed: %v", err)
+					}
+					checkpointing.Store(false)
 				}
 			case unix.SIGWINCH:
 				if ptyMasterFD != nil {
@@ -606,8 +631,6 @@ func main() {
 
 	exitStatus := tg.ExitStatus()
 	log.Infof("Guest exited with status %d", exitStatus.ExitStatus())
-	unix.Fsync(1)
-	unix.Fsync(2)
 	if *flagProfile != "" {
 		hvf.DumpStats(*flagProfile)
 	}
@@ -615,6 +638,100 @@ func main() {
 		unix.IoctlSetTermios(0, unix.TIOCSETA, termState)
 	}
 	os.Exit(int(exitStatus.ExitStatus()))
+}
+
+func setupGofer(k *kernel.Kernel, hostDir string) int {
+	fds, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_STREAM, 0)
+	if err != nil {
+		fatal("socketpair: %v", err)
+	}
+	for _, fd := range fds {
+		unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_RCVBUF, 1<<20)
+		unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_SNDBUF, 1<<20)
+	}
+	serverSock, err := unet.NewSocket(fds[0])
+	if err != nil {
+		fatal("unet.NewSocket: %v", err)
+	}
+	goferServer := lisafs.NewServer()
+	connImpl := fsgofer.NewConnectionImpl(&fsgofer.Config{
+		DonateMountPointFD: *flagDirectfs,
+	})
+	conn, err := goferServer.CreateConnection(serverSock, hostDir, fsgofer.ConnectionOpts(false), connImpl)
+	if err != nil {
+		fatal("gofer CreateConnection: %v", err)
+	}
+	goferServer.StartConnection(conn)
+	return fds[1]
+}
+
+func restoreFromCheckpoint(k *kernel.Kernel, plat *hvf.HVF, ckptPath, rootfsPath string) {
+	log.Infof("Restore: loading from %s", ckptPath)
+
+	f, err := os.Open(ckptPath)
+	if err != nil {
+		fatal("open checkpoint: %v", err)
+	}
+	defer f.Close()
+
+	// Set up FD map for restore: gofer + stdio.
+	ctx := k.SupervisorContext()
+	fdMap := make(map[checkpoint.ResourceID]int)
+	if rootfsPath != "" {
+		absRootfs, err := filepath.Abs(rootfsPath)
+		if err != nil {
+			fatal("abs rootfs: %v", err)
+		}
+		clientFD := setupGofer(k, absRootfs)
+		fdMap[checkpoint.ResourceID{Path: "rootfs"}] = clientFD
+	}
+	// Reconnect stdio to current terminal FDs.
+	for fd := 0; fd < 3; fd++ {
+		newFD, err := unix.Dup(fd)
+		if err != nil {
+			log.Warningf("Restore: can't dup stdio fd %d: %v", fd, err)
+			continue
+		}
+		fdMap[checkpoint.ResourceID{Path: fmt.Sprintf("stdio:%d", fd)}] = newFD
+	}
+	restoreCtx := pkgcontext.WithValue(ctx, vfs.CtxRestoreFilesystemFDMap, fdMap)
+
+	if err := k.LoadFrom(restoreCtx, f, nil, nil, nil, time.NewCalibratedClocks(), &vfs.CompleteRestoreOptions{}); err != nil {
+		fatal("LoadFrom: %v", err)
+	}
+	log.Infof("Restore: kernel loaded successfully")
+
+	// Start the restored kernel — resumes all saved tasks.
+	if err := k.Start(); err != nil {
+		fatal("kernel.Start after restore: %v", err)
+	}
+	log.Infof("Restore: kernel started, waiting for tasks")
+	k.WaitExited()
+	log.Infof("Restore: all tasks exited")
+}
+
+func saveCheckpoint(k *kernel.Kernel, path string) error {
+	log.Infof("Checkpoint: pausing kernel")
+	k.Pause()
+	defer k.Unpause()
+	k.ReceiveTaskStates()
+
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("create checkpoint file: %w", err)
+	}
+	log.Infof("Checkpoint: saving to %s", path)
+	ctx := k.SupervisorContext()
+	err = k.SaveTo(ctx, f, nil, nil, false, true)
+	if err != nil {
+		f.Close()
+		return fmt.Errorf("SaveTo: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close checkpoint: %w", err)
+	}
+	log.Infof("Checkpoint: saved successfully to %s", path)
+	return nil
 }
 
 // createNetworkStack creates a gVisor netstack with a loopback interface
@@ -908,10 +1025,11 @@ func setupGoferRoot(k *kernel.Kernel, vfsObj *vfs.VirtualFilesystem, creds *auth
 		fatal("unet.NewSocket: %v", err)
 	}
 
-	goferServer := fsgofer.NewLisafsServer(fsgofer.Config{
+	goferServer := lisafs.NewServer()
+	connImpl := fsgofer.NewConnectionImpl(&fsgofer.Config{
 		DonateMountPointFD: *flagDirectfs,
 	})
-	conn, err := goferServer.CreateConnection(serverSock, hostDir, false /* readonly */)
+	conn, err := goferServer.CreateConnection(serverSock, hostDir, fsgofer.ConnectionOpts(false /* readonly */), connImpl)
 	if err != nil {
 		fatal("CreateConnection: %v", err)
 	}
@@ -934,6 +1052,7 @@ func setupGoferRoot(k *kernel.Kernel, vfsObj *vfs.VirtualFilesystem, creds *auth
 			GetFilesystemOptions: vfs.GetFilesystemOptions{
 				Data: mountOpts,
 				InternalData: goferfs.InternalFilesystemOptions{
+					UniqueID: checkpoint.ResourceID{Path: "rootfs"},
 					LeakConnection: true,
 				},
 			},

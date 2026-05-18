@@ -30,13 +30,13 @@
   <text x="140" y="145" text-anchor="middle" font-weight="bold" font-size="12" fill="#85200c">Stage 1: Per-MM Page Tables</text>
   <text x="140" y="165" text-anchor="middle" font-size="11" fill="#85200c">Software-managed by HVF platform</text>
 
-  <text x="35" y="188" font-size="11" fill="#333" font-weight="bold">L2 table</text>
-  <text x="35" y="203" font-size="10" fill="#555">2048 entries, 32MB each</text>
-  <text x="35" y="218" font-size="10" fill="#555">Points to L3 tables</text>
+  <text x="35" y="188" font-size="11" fill="#333" font-weight="bold">4K granule (default)</text>
+  <text x="35" y="203" font-size="10" fill="#555">L0-L3, 512 entries each</text>
+  <text x="35" y="218" font-size="10" fill="#555">48-bit VA (T0SZ=16)</text>
 
-  <text x="145" y="188" font-size="11" fill="#333" font-weight="bold">L3 table</text>
-  <text x="145" y="203" font-size="10" fill="#555">2048 entries, 16K each</text>
-  <text x="145" y="218" font-size="10" fill="#555">IPA | nG | AF | AP[2]</text>
+  <text x="145" y="188" font-size="11" fill="#333" font-weight="bold">L3 descriptor</text>
+  <text x="145" y="203" font-size="10" fill="#555">IPA[47:12] | nG | AF | AP[2]</text>
+  <text x="145" y="218" font-size="10" fill="#555">4K page per entry</text>
 
   <text x="35" y="240" font-size="10" fill="#85200c">ASID in TTBR0_EL1 for TLB invalidation</text>
   <text x="35" y="255" font-size="10" fill="#85200c">AP[2]=1 for COW (read-only pages)</text>

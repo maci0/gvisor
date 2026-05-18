@@ -103,6 +103,7 @@ func (as *addressSpace) MapFile(addr hostarch.Addr, f memmap.File, fr memmap.Fil
 	}
 
 	// Map each block: assign IPA via allocator, then update page table.
+	startAddr := addr
 	for !bs.IsEmpty() {
 		b := bs.Head()
 		bs = bs.Tail()
@@ -123,12 +124,16 @@ func (as *addressSpace) MapFile(addr hostarch.Addr, f memmap.File, fr memmap.Fil
 				ipa, err = as.machine.ipaAlloc.mapPage(pageHost, pageSz)
 			}
 			if err != nil {
+				if mapped := uint64(addr - startAddr); mapped > 0 {
+					as.unmapLocked(startAddr, mapped)
+				}
 				return err
 			}
 
-			// Update our per-MM page table to map GVA → IPA.
-			// Pass write permission so COW pages are mapped read-only.
 			if err := as.pt.mapPage(uint64(pageGVA), ipa, at.Write); err != nil {
+				if mapped := uint64(addr - startAddr); mapped > 0 {
+					as.unmapLocked(startAddr, mapped)
+				}
 				return err
 			}
 		}

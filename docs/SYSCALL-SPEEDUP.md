@@ -97,18 +97,12 @@ with O(mapped) range unmap that walks only populated L3 tables.
 syscall dispatch: the handler sets X0 = return value and ERETs to EL0
 without VM exit. Verified by vmtest Test 5 and production (88/88 pass).
 
-**In-VM fast-path syscalls (12 syscalls, zero VM exit):**
-- **Table dispatch (172-178)**: getpid, getppid, getuid, geteuid, getgid,
+**In-VM fast-path syscalls (11 syscalls, zero VM exit):**
+- **Table dispatch (7)**: getpid, getppid, getuid, geteuid, getgid,
   getegid, gettid — SUB+CMP+ADR+BR at 0x400. Patchable MOVZ values
   rewritten by host per-task via PatchFastPathSyscalls().
-- **Extended handler (0x600)**: sched_yield(124), getpgid(0) (155),
+- **Extended handler (4, at 0x600)**: sched_yield(124), getpgid(0) (155),
   getsid(0) (156), set_tid_address(96) — patchable return values.
-- **rt_sigprocmask handler (0x680)**: reads/writes signal mask via
-  state page + STTR/LDTR for user memory (bypasses PAN). Signal mask
-  synced to/from state page by task_run.go via platform.SignalMasker.
-  TLBI VMALLE1IS inside handler for TTBR1 TLB population. Catches
-  ~83% of calls in single-process mode; child processes after fork
-  may fall through to sentry (TTBR1 TLB cold after ASIDE1IS).
 - **getpid: 0.1µs (was 4µs — 40x faster)**
 - **16M calls/second**
 
@@ -273,11 +267,7 @@ Guest EL0: SVC → EL1 sentry: dispatch → ERET
 **Implementation status**: Substantial infrastructure exists:
 - `syscall_el1.go`: SyscallHandler registration + dispatch
 - `runtime_el1.go`: HVC proxy for host I/O
-- `vmm_protocol.go`: Shared memory protocol (VMMRequest)
-- `tlbi_el1.go`: Direct TLBI functions
 - `memory_el1.go`: Dual-TTBR layout design
-- `ring0_integration_test.go`: Test skeletons (all skipped)
-- Vector stub at 0x820: Ring0 entry (identical to 0x810, TCR swap TODO)
 
 **Previous blocker (RESOLVED):** EL1 data access was thought to be
 blocked by HVF. el1memtest proved this was a PAN (Privileged Access

@@ -26,6 +26,14 @@ const (
 	// HugePageSize is the system huge page size.
 	HugePageSize = 1 << HugePageShift
 
+	// GuestPageShift is the binary log of the guest page size.
+	// On x86, guest and host page sizes are identical.
+	GuestPageShift = PageShift
+
+	// GuestPageSize is the guest page size visible to applications.
+	// On x86, this equals PageSize.
+	GuestPageSize = 1 << GuestPageShift
+
 	// CacheLineSize is the size of the cache line.
 	CacheLineSize = 1 << CacheLineShift
 

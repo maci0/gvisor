@@ -12,26 +12,21 @@
 
   <rect x="160" y="45" width="80" height="40" rx="0" fill="#cfe2f3" stroke="#6d9eeb" stroke-width="1"/>
   <text x="200" y="60" text-anchor="middle" font-size="9" font-weight="bold" fill="#1155cc">PT Pages</text>
-  <text x="200" y="75" text-anchor="middle" font-size="8" fill="#3c78d8">0x10000-1MB</text>
+  <text x="200" y="75" text-anchor="middle" font-size="8" fill="#3c78d8">0x10000-16MB</text>
 
-  <rect x="240" y="45" width="80" height="40" rx="0" fill="#d9d2e9" stroke="#8e7cc3" stroke-width="1"/>
-  <text x="280" y="60" text-anchor="middle" font-size="9" font-weight="bold" fill="#351c75">Dispatch</text>
-  <text x="280" y="75" text-anchor="middle" font-size="8" fill="#674ea7">~1MB (16K)</text>
-
-  <rect x="320" y="45" width="210" height="40" rx="0" fill="#d9ead3" stroke="#6aa84f" stroke-width="1"/>
-  <text x="425" y="60" text-anchor="middle" font-size="9" font-weight="bold" fill="#274e13">Data Pages (guest memory + state pages)</text>
-  <text x="425" y="75" text-anchor="middle" font-size="8" fill="#38761d">0x1000000 (16MB) → 1TB</text>
+  <rect x="240" y="45" width="290" height="40" rx="0" fill="#d9ead3" stroke="#6aa84f" stroke-width="1"/>
+  <text x="385" y="55" text-anchor="middle" font-size="9" font-weight="bold" fill="#274e13">Data Pages (IPA allocator: dispatch, state, guest memory)</text>
+  <text x="385" y="75" text-anchor="middle" font-size="8" fill="#38761d">0x1000000 (16MB) → 1TB</text>
 
   <!-- Labels -->
   <text x="55" y="100" text-anchor="middle" font-size="8" fill="#666">16K, RX</text>
-  <text x="200" y="100" text-anchor="middle" font-size="8" fill="#666">16K each, RW</text>
-  <text x="280" y="100" text-anchor="middle" font-size="8" fill="#666">16K, RX</text>
-  <text x="425" y="100" text-anchor="middle" font-size="8" fill="#666">4K/16K, RWX</text>
+  <text x="200" y="100" text-anchor="middle" font-size="8" fill="#666">4K/16K, RW</text>
+  <text x="385" y="100" text-anchor="middle" font-size="8" fill="#666">per-IPA size tracked</text>
 
   <!-- TTBR1 mapping annotation -->
   <rect x="20" y="120" width="520" height="65" rx="4" fill="#fff9e6" stroke="#f1c232" stroke-width="1"/>
   <text x="30" y="138" font-size="10" font-weight="bold" fill="#7f6000">TTBR1 Kernel VA Mapping (shared across all vCPUs):</text>
-  <text x="30" y="155" font-size="10" fill="#7f6000">kernelVABase+0x0000 → Vectors (IPA 0x0)           AP[1]=0, nG=0, RX</text>
-  <text x="30" y="168" font-size="10" fill="#7f6000">kernelVABase+0x4000 → State pages (per-vCPU)       AP[1]=0, nG=0, RW</text>
-  <text x="30" y="181" font-size="10" fill="#7f6000">kernelVABase+0x100000 → Dispatch code page          AP[1]=0, nG=0, RX</text>
+  <text x="30" y="155" font-size="10" fill="#7f6000">kernelVABase+0x0000   → Vectors (IPA 0x0)            AP[1]=0, nG=0, RX</text>
+  <text x="30" y="168" font-size="10" fill="#7f6000">kernelVABase+0x4000   → State pages (per-vCPU, 16K)   AP[1]=0, nG=0, RW</text>
+  <text x="30" y="181" font-size="10" fill="#7f6000">kernelVABase+0x100000 → Dispatch code page (KVA)      AP[1]=0, nG=0, RX</text>
 </svg>

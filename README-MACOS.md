@@ -36,7 +36,9 @@
 | MRS ID register emulation (trap-and-emulate) | Working |
 | EL0 cache maintenance (DC CIVAC, CTR_EL0) | Working (SCTLR_EL1 UCI/UCT) |
 | 4K guest pages (default) | Working (IPA granule 4K, TG0=4K) |
+| Split page model (4K guest / 16K host) | Working (74/77 Alpine tests) |
 | GraalVM Native Image (Java AOT) | Working |
+| FEX-Emu (x86_64 emulation) | Partial — [COW fault loop](docs/FEX-EMU.md) |
 | Java / JVM (HotSpot JIT) | Blocked — [upstream JDK bug](docs/MRS-TRAPPING.md) |
 
 ## Quick Start
@@ -274,9 +276,9 @@ The port replaces gVisor's KVM platform with a Hypervisor.framework (HVF) platfo
 0x00000-0x03FFF  Vectors page (16K, RX)
 0x04000-0x0FFFF  Reserved
 0x10000-0xFFFFF  Page table pages (PT allocator, RW)
-0x100000+        Dispatch code page (16K, RX)
 0x1000000+       Data pages (IPA allocator, RWX)
-                 State pages, guest memory, shadow copies
+                 Dispatch code page, state pages,
+                 guest memory, shadow copies
 ```
 
 ### Page Tables
@@ -512,14 +514,71 @@ sudo brew services start socket_vmnet
 
 macOS errno `ENOATTR` (93) has no Linux equivalent. It maps to Linux `ENODATA` (61) for extended attribute operations. Added in `pkg/syserr/host_darwin.go`. The `GetFilePrivileges` VFS function also checks for raw `ENOATTR` via `isErrNoData()` since in-process gofer errors bypass the lisafs protocol's errno translation.
 
-### Page Size
+### Page Size: Split Model (4K Guest / 16K Host)
 
-macOS host uses 16K pages (`hostarch.PageSize = 16384`), but the guest
-defaults to 4K pages (matching Linux ARM64). The HVF platform uses
-`hv_vm_config_set_ipa_granule(HV_IPA_GRANULE_4KB)` for 4K stage-2 and
-`TCR_EL1.TG0=0x0` for 4K stage-1 page tables. The mm layer internally
-uses 16K VMA alignment; sub-16K PROT_NONE guard pages are handled by
-skipping VMA creation (no page table entry = fault on access).
+macOS uses 16K host pages, but Linux ARM64 guests expect 4K. The port
+uses a split page size model with two constants:
+
+| Constant | Value | Layer | Purpose |
+|----------|-------|-------|---------|
+| `GuestPageSize` | 4096 | Syscall-facing (VMA) | mmap alignment, mprotect granularity, AT_PAGESZ |
+| `PageSize` | 16384 | Host-facing (PMA, MemoryFile) | Physical allocation, HVF mapping, file I/O |
+
+On darwin, `GuestPageSize` is set to 4K. All VMA operations (mmap
+addresses, mprotect ranges, munmap boundaries) align to 4K. The PMA
+layer and MemoryFile continue to allocate in 16K chunks internally.
+
+**How the layers interact:**
+
+```
+Syscall layer (4K)          PMA layer (16K)           MemoryFile (16K)
+┌──────────────┐           ┌──────────────┐          ┌──────────────┐
+│ mmap addr    │──align──→ │ allocate     │──round──→│ fr.Start     │
+│ aligned to   │  to 4K    │ rounds to    │  to 16K  │ aligned to   │
+│ GuestPageSize│           │ PageSize     │          │ GuestPageSize│
+└──────────────┘           └──────────────┘          └──────────────┘
+```
+
+**MAP_FIXED behavior:**
+
+`MAP_FIXED` passes the 4K-aligned address directly to the kernel
+without additional rounding. This is critical for programs like
+FEX-Emu and glibc's `ld.so` that rely on precise ELF segment
+placement. Non-fixed mappings are aligned to `GuestPageSize` by the
+VMA layer.
+
+**HandleUserFault fallback:**
+
+When a page fault occurs, `HandleUserFault` first tries to map a full
+16K range (the enclosing `PageSize`-aligned region). If this range
+crosses a VMA boundary, it falls back to mapping a single 4K page at
+the faulting address. This handles cases where adjacent VMAs have
+different permissions or protection flags.
+
+**PMA clamping:**
+
+The PMA layer clamps all allocations to the containing VMA's bounds.
+A 16K physical allocation that would extend past the VMA end is
+truncated. This prevents one VMA's physical pages from leaking into
+an adjacent VMA's address range.
+
+**MemoryFile:**
+
+`MemoryFile` accepts allocations aligned to `GuestPageSize` (4K). The
+backing file offset arithmetic uses 4K granularity for VMA-facing
+operations, while the underlying `mmap` and HVF mappings operate at
+16K boundaries.
+
+**Test results:** 74/77 Alpine tests pass with the split model,
+matching the baseline pass rate.
+
+**Stage-2 and stage-1 configuration:**
+
+The HVF platform uses `hv_vm_config_set_ipa_granule(HV_IPA_GRANULE_4KB)`
+for 4K stage-2 and `TCR_EL1.TG0=0x0` for 4K stage-1 page tables.
+Sub-16K `PROT_NONE` guard pages (from musl/glibc thread stacks) are
+handled by skipping VMA creation -- the absence of a page table entry
+provides equivalent fault behavior.
 
 Use `--page16k` to revert to 16K guest pages if needed.
 
@@ -629,7 +688,10 @@ Total: **19/19 packages**, 114 packages installed, 314 MiB.
 
 Run: `./cmd/sentrydarwin/test.sh [rootfs_path]`
 
-**89/89 tests pass** on Alpine 3.21 with python3, jq, and GraalVM native-image.
+**88 tests** (86-88 pass consistently, 0-2 timing-sensitive flakes) on Alpine
+3.21 with python3, jq, and GraalVM native-image. Multi-threaded programs,
+TCP loopback, and subprocess.run all supported. 2 tests skipped (hashlib
+crypto traps, GraalVM not installed).
 
 | Category | Tests | Coverage |
 |----------|-------|----------|
@@ -735,7 +797,11 @@ Run: `./cmd/sentrydarwin/test.sh [rootfs_path]`
 - [x] In-VM ESR_EL1 dispatch (el0_sync classifies SVC vs fault at EL1)
 - [x] 4K pages as default (matching Linux ARM64)
 - [ ] State page via separate TTBR0 page (next approach for register batching)
-- [x] In-VM fast-path syscalls via ERET (12 syscalls, 40x faster, 0.1µs)
+- [x] In-VM fast-path syscalls via ERET (11 syscalls, 40x faster, 0.1µs)
+- [x] Split page size model (GuestPageSize=4K, PageSize=16K, 74/77 Alpine tests)
+- [x] MAP_FIXED fix for FEX-Emu/glibc ld.so (no page4KRound on Fixed)
+- [x] FEX-Emu shared library loading (libstdc++, libc, libm, libgcc_s, ld.so)
+- [ ] FEX-Emu COW fault loop (L3 permission fault on non-16K-aligned IPA)
 - [ ] COW fork race at high concurrency (TLB coherency, needs Apple API)
 
 
@@ -782,13 +848,11 @@ native, limited by syscall overhead per I/O operation.
 
 ### In-VM fast-path syscalls
 
-12 syscalls handled entirely at EL1 — no VM exit:
+11 syscalls handled entirely at EL1 — no VM exit:
 getpid, getppid, getuid, geteuid, getgid, getegid, gettid (table
 dispatch at 0x400), sched_yield, getpgid(0), getsid(0), set_tid_address
-(extended handler at 0x600), and rt_sigprocmask (handler at 0x680 using
-STTR/LDTR for user memory + state page for mask storage).
-**16M calls/second** for register-only syscalls. sigprocmask ~83% catch
-rate (TTBR1 TLB cold miss causes fallback on first call per vCPU).
+(extended handler at 0x600).
+**16M calls/second** for register-only syscalls.
 
 ### Switch() hot path breakdown (non-fast-path syscalls)
 
@@ -905,6 +969,66 @@ Note: native-image binaries are dynamically linked against glibc. Copy
 the Alpine rootfs. See [docs/MRS-TRAPPING.md](docs/MRS-TRAPPING.md) for
 details on why standard HotSpot JVMs don't work.
 
+## FEX-Emu (x86_64 Emulation)
+
+FEX-Emu translates x86_64 Linux binaries to ARM64 at runtime. It runs
+inside gVisor on macOS, enabling x86_64 workloads on Apple Silicon
+without a full x86 VM.
+
+**Status:** FEX loads all shared libraries and starts the interpreter.
+The original string table corruption crash (`0x4700312e6f7331d9`) is
+fixed. A remaining L3 permission fault loop blocks full execution --
+see [docs/FEX-EMU.md](docs/FEX-EMU.md) for root cause analysis.
+
+**What works:**
+
+- FEX's own ELF segments load correctly (`p_align=0x10000`, no 4K overlap)
+- All shared libraries load: libstdc++, libc, libm, libgcc_s, libpthread, ld.so
+- glibc's `ld.so` loads correctly with the `MAP_FIXED` fix
+- 106 syscalls complete successfully during startup
+
+### Setup
+
+```bash
+# Build an Ubuntu rootfs with FEX-Emu
+docker run --platform linux/arm64 --name fex-build -d ubuntu:24.04 sleep 3600
+docker exec fex-build apt-get update -qq
+docker exec fex-build apt-get install -y -qq software-properties-common
+docker exec fex-build add-apt-repository -y ppa:fex-emu/fex
+docker exec fex-build apt-get install -y -qq fex-emu-armv8.0 binutils
+docker export fex-build | tar -C _tmp/ubuntu-rootfs -xf -
+docker rm -f fex-build
+
+# Create a static x86_64 test binary
+docker run --platform linux/amd64 --name x86build -d gcc:latest sleep 60
+docker exec x86build bash -c 'cat > /tmp/h.c << '\''EOF'\''
+#include <unistd.h>
+int main() { write(1, "hello x86\n", 10); return 0; }
+EOF
+gcc -static -o /tmp/hello_x86 /tmp/h.c'
+docker cp x86build:/tmp/hello_x86 _tmp/ubuntu-rootfs/usr/local/bin/hello_x86
+docker rm -f x86build
+
+# Run FEX-Emu on gVisor
+./sentrydarwin --rootfs _tmp/ubuntu-rootfs /usr/bin/FEXInterpreter /usr/local/bin/hello_x86
+```
+
+### Remaining Issue
+
+COW break for non-16K-aligned file-backed private pages triggers an L3
+permission fault loop. When the guest writes to a COW page whose
+backing IPA is not 16K-aligned, the AP bit update (read-only to
+read-write) does not take effect in the HVF stage-2 TLB. The guest
+re-faults on the same address indefinitely. This is an Apple Silicon
+HVF limitation with 4K granule page table permission upgrades.
+
+**Workaround under investigation:** IPA remapping (allocate new IPA,
+copy data, remap) instead of in-place AP bit changes for COW breaks
+on non-aligned pages.
+
+See [docs/FEX-EMU.md](docs/FEX-EMU.md) for the full investigation,
+including the original crash root cause and the `page4KRound` fix.
+
 ## Nested Virtualization (gVisor-in-gVisor)
 
 gVisor can run inside itself on macOS using the ptrace platform. The outer
@@ -998,7 +1122,8 @@ the saved syscall SP. Needs sentry-level fix for vfork task scheduling.
 - **Shadow page memory**: File-backed guest pages (shared libraries, executables) use 2x memory due to anonymous shadow copies. Negligible for most workloads.
 - **VDSO sub-millisecond timing**: `CNTVCT_EL0` reads inside the guest may return the same value within a single HVF execution slice. Programs that measure sub-millisecond intervals via the VDSO (e.g., `ping` RTT) show `time=0.000 ms` after the first packet. Wall clock and second-resolution timing work correctly.
 - **Java / JVM**: Blocked by upstream HotSpot AArch64 assembler bug (`logical_immediate_encode` fails for 16K-derived values). Tested JDK 17, 21, 26 — all crash identically during stub generation. See [docs/MRS-TRAPPING.md](docs/MRS-TRAPPING.md).
-- **Page size**: Guest defaults to 4K (Linux standard). The mm layer internally uses 16K VMA alignment. Sub-16K PROT_NONE guard pages (from musl/glibc) are handled by skipping VMA creation — the absence of a page table entry provides equivalent fault behavior. Use `--page16k` for macOS-native 16K pages.
+- **Page size**: Guest uses a split model -- `GuestPageSize=4K` for VMA alignment (syscall-facing), `PageSize=16K` for PMA/MemoryFile (host-facing). HandleUserFault tries 16K ranges first and falls back to 4K at VMA boundaries. PMA allocations clamp to VMA bounds. Sub-16K PROT_NONE guard pages are handled by skipping VMA creation. Use `--page16k` for macOS-native 16K pages. See [Split Page Size Model](#page-size-split-model-4k-guest--16k-host).
+- **FEX-Emu COW faults**: Non-16K-aligned file-backed private pages trigger an L3 permission fault loop during COW break. Apple Silicon HVF does not flush stale stage-2 TLB entries when AP bits change on sub-16K-aligned IPAs. Workaround: IPA remapping instead of in-place AP changes. See [docs/FEX-EMU.md](docs/FEX-EMU.md).
 - **Stale vmnet packets**: When using `--net=vmnet`, ICMP replies from previous sessions may appear briefly. Clears after vmnet bridge ARP entries expire (~30s).
 
 ## TLB Coherency (HVF ARM64 Limitation)
@@ -1411,15 +1536,11 @@ traps to the el0_sync handler), not MRS from the EL1 handler itself.
 Test 7 proves the el0_sync handler CAN read ESR_EL1 (returns EC=0x15
 SVC syndrome), ELR_EL1, and FAR_EL1 after EL0→EL1 exceptions.
 
-**ERET fast-path achieved** for 8 register-only syscalls (getpid etc,
-~0.1µs, 40x faster). Further expansion blocked by EL1 data access:
-
-**EL1 data access exhaustively tested (vmtest Tests 1-8):**
-ALL data access (LDR/STR) through stage-1 page tables from EL1 faults
-or returns stale data. Only instruction fetches work through stage-1.
-Data access works with MMU off (direct IPA), but MSR SCTLR_EL1 to
-toggle MMU is trapped by HVF. The 8 fast-path syscalls using pure
-register operations (MRS, MOVZ, CMP) are the theoretical maximum.
+**ERET fast-path achieved** for 11 syscalls (~0.1µs, 40x faster):
+7 table-dispatch (getpid, gettid, getuid, getgid, geteuid, getegid,
+clock_gettime) + 4 extended (sched_yield, getpgid, getsid,
+set_tid_address). EL1 data access through TTBR1 kernel page tables
+enables reading per-vCPU state pages and dispatch code.
 
 **What would enable more fast-path syscalls:**
 1. Apple fixing EL1 data access through stage-1 (LDR/STR from TTBR0/1)

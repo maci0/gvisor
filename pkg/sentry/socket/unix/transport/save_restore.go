@@ -16,12 +16,18 @@ package transport
 
 import (
 	"context"
-	"fmt"
 )
 
 // afterLoad is invoked by stateify.
 func (c *HostConnectedEndpoint) afterLoad(context.Context) {
+	if c.fd < 0 {
+		c.rdShutdown.Store(true)
+		c.wrShutdown.Store(true)
+		return
+	}
 	if err := c.initFromOptions(); err != nil {
-		panic(fmt.Sprintf("initFromOptions failed: %v", err))
+		c.fd = -1
+		c.rdShutdown.Store(true)
+		c.wrShutdown.Store(true)
 	}
 }

@@ -19,7 +19,7 @@
 
   <!-- fsgofer (green) -->
   <rect x="270" y="65" width="180" height="100" rx="4" fill="#d9ead3" stroke="#6aa84f" stroke-width="1.5"/>
-  <text x="360" y="85" text-anchor="middle" font-weight="bold" fill="#274e13">fsgofer.LisafsServer</text>
+  <text x="360" y="85" text-anchor="middle" font-weight="bold" fill="#274e13">lisafs.Server</text>
   <text x="360" y="105" text-anchor="middle" font-size="11" fill="#38761d">lisafs.Server</text>
   <text x="360" y="125" text-anchor="middle" font-size="11" fill="#38761d">Host I/O via POSIX</text>
   <text x="360" y="145" text-anchor="middle" font-size="10" fill="#38761d">(--rootfs directory)</text>

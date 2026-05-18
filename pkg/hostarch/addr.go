@@ -55,6 +55,21 @@ func (v Addr) MustRoundUp() Addr {
 	return MustPageRoundUp(v)
 }
 
+// GuestRoundDown is equivalent to function GuestPageRoundDown.
+func (v Addr) GuestRoundDown() Addr {
+	return GuestPageRoundDown(v)
+}
+
+// GuestRoundUp is equivalent to function GuestPageRoundUp.
+func (v Addr) GuestRoundUp() (Addr, bool) {
+	return GuestPageRoundUp(v)
+}
+
+// IsGuestPageAligned is equivalent to function IsGuestPageAligned.
+func (v Addr) IsGuestPageAligned() bool {
+	return IsGuestPageAligned(v)
+}
+
 // HugeRoundDown is equivalent to function HugePageRoundDown.
 func (v Addr) HugeRoundDown() Addr {
 	return HugePageRoundDown(v)
@@ -117,6 +132,12 @@ func (v Addr) MustToRange(length uint64) AddrRange {
 // ar.End.IsPageAligned().
 func (ar AddrRange) IsPageAligned() bool {
 	return ar.Start.IsPageAligned() && ar.End.IsPageAligned()
+}
+
+// IsGuestPageAligned returns true if ar.Start.IsGuestPageAligned() and
+// ar.End.IsGuestPageAligned().
+func (ar AddrRange) IsGuestPageAligned() bool {
+	return ar.Start.IsGuestPageAligned() && ar.End.IsGuestPageAligned()
 }
 
 // IsHugePageAligned returns true if ar.Start.IsHugePageAligned() and

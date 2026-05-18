@@ -650,8 +650,8 @@ func savePrivateMFs(ctx context.Context, w io.Writer, mfsToSave map[checkpoint.R
 //
 // Preconditions: The kernel must be paused throughout the call to SaveTo.
 func (k *Kernel) SaveTo(ctx context.Context, stateFile, pagesMetadata io.WriteCloser, pagesFile stateio.AsyncWriter, appMFExcludeCommittedZeroPages, resume bool) error {
-	if hostarch.PageSize != 4096 {
-		return fmt.Errorf("save is not supported with %dK page size", hostarch.PageSize/1024)
+	if hostarch.GuestPageSize != 4096 {
+		return fmt.Errorf("save is not supported with %dK guest page size", hostarch.GuestPageSize/1024)
 	}
 	saveStart := time.Now()
 
@@ -872,8 +872,8 @@ func (k *Kernel) invalidateUnsavableMappings(ctx context.Context) error {
 
 // LoadFrom returns a new Kernel loaded from args.
 func (k *Kernel) LoadFrom(ctx context.Context, r io.Reader, asyncMFLoader *AsyncMFLoader, timeReady chan struct{}, net inet.Stack, clocks sentrytime.Clocks, vfsOpts *vfs.CompleteRestoreOptions) error {
-	if hostarch.PageSize != 4096 {
-		return fmt.Errorf("restore is not supported with %dK page size", hostarch.PageSize/1024)
+	if hostarch.GuestPageSize != 4096 {
+		return fmt.Errorf("restore is not supported with %dK guest page size", hostarch.GuestPageSize/1024)
 	}
 	loadStart := time.Now()
 
@@ -966,8 +966,8 @@ func (k *Kernel) LoadFrom(ctx context.Context, r io.Reader, asyncMFLoader *Async
 // ExtractRootfsUpperLayer partially restores the kernel state and extracts the
 // rootfs upper layer to the provided file.
 func (k *Kernel) ExtractRootfsUpperLayer(ctx context.Context, r io.Reader, asyncMFLoader *AsyncMFLoader, timeReady chan struct{}, clocks sentrytime.Clocks, outFD *os.File) error {
-	if hostarch.PageSize != 4096 {
-		return fmt.Errorf("restore is not supported with %dK page size", hostarch.PageSize/1024)
+	if hostarch.GuestPageSize != 4096 {
+		return fmt.Errorf("restore is not supported with %dK guest page size", hostarch.GuestPageSize/1024)
 	}
 	loadStart := time.Now()
 

@@ -85,6 +85,10 @@ func (mm *MemoryManager) mapASLocked(ctx context.Context, pseg pmaIterator, ar h
 		pma := pseg.ValuePtr()
 		pmaAR := pseg.Range()
 		pmaMapAR := pmaAR.Intersect(mapAR)
+		if pmaMapAR.Length() == 0 {
+			pseg = pseg.NextSegment()
+			continue
+		}
 		perms := pma.effectivePerms
 		if pma.needCOW {
 			perms.Write = false

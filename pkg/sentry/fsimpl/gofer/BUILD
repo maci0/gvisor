@@ -68,7 +68,7 @@ go_library(
     name = "gofer",
     srcs = [
         "dentry_list.go",
-        "directfs_inode.go",
+        "directfs_inode_linux.go",
         "directfs_inode_darwin.go",
         "gofer_compat_darwin.go",
         "gofer_compat_linux.go",

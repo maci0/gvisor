@@ -10,6 +10,7 @@ package hostarch
 const (
 	PageMask      = PageSize - 1
 	HugePageMask  = HugePageSize - 1
+	GuestPageMask = GuestPageSize - 1
 	CacheLineMask = CacheLineSize - 1
 )
 
@@ -52,6 +53,25 @@ func PageOffset[T bytecount](x T) T {
 // IsPageAligned returns true if x is a multiple of PageSize.
 func IsPageAligned[T bytecount](x T) bool {
 	return PageOffset(x) == 0
+}
+
+// GuestPageRoundDown returns x rounded down to the nearest multiple of
+// GuestPageSize.
+func GuestPageRoundDown[T bytecount](x T) T {
+	return x &^ GuestPageMask
+}
+
+// GuestPageRoundUp returns x rounded up to the nearest multiple of
+// GuestPageSize. ok is true iff rounding up does not overflow the range of T.
+func GuestPageRoundUp[T bytecount](x T) (val T, ok bool) {
+	val = GuestPageRoundDown(x + GuestPageMask)
+	ok = val >= x
+	return
+}
+
+// IsGuestPageAligned returns true if x is a multiple of GuestPageSize.
+func IsGuestPageAligned[T bytecount](x T) bool {
+	return x&T(GuestPageMask) == 0
 }
 
 // ToPagesRoundUp returns (the number of pages equal to x bytes rounded up,

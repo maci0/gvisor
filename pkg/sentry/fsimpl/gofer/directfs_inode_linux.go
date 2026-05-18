@@ -18,6 +18,7 @@ package gofer
 
 import (
 	"bytes"
+	stdContext "context"
 	"fmt"
 	"math"
 	"path"
@@ -920,3 +921,8 @@ func checkSupportedFileType(mode uint32) error {
 }
 
 // LINT.ThenChange(../../../../runsc/fsgofer/lisafs.go)
+
+// afterLoad is invoked by stateify.
+func (i *directfsInode) afterLoad(stdContext.Context) {
+	i.controlFD = -1
+}

@@ -169,12 +169,14 @@ func initCPUInfoDarwin() {
 	hostFeatureSet.cpuFreqMHz = 48.00
 
 	// Apple Silicon supports these ARM features.
+	// AES/SHA/PMULL hidden: HVF intermittently traps them with EC=0
+	// during OpenSSL init. Guest uses software crypto fallbacks.
 	hostFeatureSet.hwCap = hwCap{
-		hwCap1: HWCAP_FP | HWCAP_ASIMD | HWCAP_AES | HWCAP_PMULL |
-			HWCAP_SHA1 | HWCAP_SHA2 | HWCAP_CRC32 | HWCAP_ATOMICS |
+		hwCap1: HWCAP_FP | HWCAP_ASIMD |
+			HWCAP_CRC32 | HWCAP_ATOMICS |
 			HWCAP_FPHP | HWCAP_ASIMDHP | HWCAP_ASIMDRDM | HWCAP_JSCVT |
-			HWCAP_FCMA | HWCAP_LRCPC | HWCAP_DCPOP | HWCAP_SHA3 |
-			HWCAP_ASIMDDP | HWCAP_SHA512 | HWCAP_FLAGM | HWCAP_SSBS |
+			HWCAP_FCMA | HWCAP_LRCPC | HWCAP_DCPOP |
+			HWCAP_ASIMDDP | HWCAP_FLAGM | HWCAP_SSBS |
 			HWCAP_DIT | HWCAP_ILRCPC | HWCAP_ASIMDFHM,
 	}
 }

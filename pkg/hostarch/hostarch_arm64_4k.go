@@ -27,13 +27,14 @@ const (
 	// For 4K pages: PageShift + (PageShift - 3) = 12 + 9 = 21
 	// This gives 2MB huge pages.
 	HugePageShift = 21
+
+	// GuestPageShift is the binary log of the guest page size.
+	// On non-darwin arm64 4K hosts, guest and host page sizes are identical.
+	GuestPageShift = PageShift
 )
 
 func init() {
-	// Accept both 4K and 16K page sizes. On macOS gVisor (16K pages),
-	// guest binaries compiled for 4K still work because the sentry
-	// rounds up mmap requests to the host page size.
-	if size := unix.Getpagesize(); size != PageSize && size != 16384 {
+	if size := unix.Getpagesize(); size != PageSize {
 		println("WARNING: host page size mismatch")
 	}
 }

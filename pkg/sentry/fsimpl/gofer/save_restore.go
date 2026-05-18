@@ -246,11 +246,6 @@ func (d *dentry) afterLoad(goContext.Context) {
 }
 
 // afterLoad is invoked by stateify.
-func (i *directfsInode) afterLoad(goContext.Context) {
-	i.controlFD = -1
-}
-
-// afterLoad is invoked by stateify.
 func (fd *specialFileFD) afterLoad(goContext.Context) {
 	fd.handle.fd = -1
 }

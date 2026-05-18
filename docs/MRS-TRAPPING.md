@@ -250,7 +250,7 @@ codesign -s - --entitlements entitlements.plist -f mrstest
 | DC CIVAC SIGILL | SCTLR_EL1.UCI=1 (EL0 cache maintenance) | `vcpu_arm64.go` |
 | CTR_EL0 trap storm | SCTLR_EL1.UCT=1 (EL0 counter read) | `vcpu_arm64.go` |
 | Wrong PFR0/ISAR0 values | Match Apple M4 Pro features | `context.go`, `ipa_allocator.go` |
-| 16K page size in auxv | `--page4k` flag → AT_PAGESZ=4096 | `loader.go`, `sys_mmap.go` |
+| 16K page size in auxv | `hostarch.GuestPageSize=4096` → AT_PAGESZ=4096 | `loader.go`, `hostarch_arm64_darwin.go` |
 | Sub-16K guard pages | Skip PROT_NONE < 16K at syscall level | `sys_mmap.go` |
 
 ### What blocks Java

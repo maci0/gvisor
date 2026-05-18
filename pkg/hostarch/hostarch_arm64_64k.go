@@ -27,6 +27,10 @@ const (
 	// For 64K pages: PageShift + (PageShift - 3) = 16 + 13 = 29
 	// This gives 512MB huge pages.
 	HugePageShift = 29
+
+	// GuestPageShift is the binary log of the guest page size.
+	// On 64K hosts, guest and host page sizes are identical.
+	GuestPageShift = PageShift
 )
 
 func init() {

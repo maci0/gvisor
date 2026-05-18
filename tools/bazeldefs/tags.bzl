@@ -43,6 +43,7 @@ archs = [
 
 oses = [
     "_linux",
+    "_darwin",
     "_nonlinux",
 ]
 

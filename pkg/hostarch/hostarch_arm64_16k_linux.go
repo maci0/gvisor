@@ -11,6 +11,7 @@
 package hostarch
 
 const (
-	PageShift     = 14  // 16K pages: 2^14 = 16384
-	HugePageShift = 25  // 2^14 + (14-3) = 25 → 32MB huge pages
+	PageShift      = 14  // 16K pages: 2^14 = 16384
+	HugePageShift  = 25  // 2^14 + (14-3) = 25 → 32MB huge pages
+	GuestPageShift = PageShift // On Linux 16K hosts, guest and host page sizes are identical.
 )

@@ -19,12 +19,14 @@ package hostarch
 const (
 	// PageShift is the binary log of the system page size.
 	// macOS ARM64 uses 16K pages (2^14 = 16384).
-	// The HVF guest uses 4K pages via IPA granule, but the host
-	// memory system (mmap, posix_memalign) requires 16K alignment.
-	// The page4K rounding shim in sys_mmap.go bridges the gap.
 	PageShift = 14
 
 	// HugePageShift is the binary log of the system huge page size.
 	// For 16K pages: 32MB huge pages (2^25).
 	HugePageShift = 25
+
+	// GuestPageShift is the binary log of the guest page size.
+	// Linux ARM64 uses 4K pages (2^12 = 4096), so the guest presents
+	// 4K alignment to applications while the host operates on 16K pages.
+	GuestPageShift = 12
 )

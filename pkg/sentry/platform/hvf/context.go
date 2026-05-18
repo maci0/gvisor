@@ -507,11 +507,12 @@ func emulateSysreg(ac *arch.Context64, iss uint64) bool {
 
 	// ID_AA64ISAR0_EL1: op1=0, CRn=0, CRm=6, op2=0 → key=0x0060
 	case 0x0060:
-		// Match Apple M4 Pro features (must agree with /proc/cpuinfo):
-		// AES[7:4]=2 (PMULL), SHA1[11:8]=1, SHA2[15:12]=2 (SHA512),
+		// HVF intermittently traps crypto instructions at EL0 with
+		// EC=0 during OpenSSL init (page-boundary related). Hide
+		// crypto features so the guest uses software fallbacks.
 		// CRC32[19:16]=1, Atomic[23:20]=2 (LSE), RDM[31:28]=1,
-		// SHA3[35:32]=1, DP[47:44]=1, FHM[51:48]=1.
-		val = 0x0001100110212120
+		// DP[47:44]=1, FHM[51:48]=1.
+		val = 0x0001100010210000
 
 	// ID_AA64ISAR1_EL1: op1=0, CRn=0, CRm=6, op2=1 → key=0x0061
 	case 0x0061:
@@ -537,7 +538,7 @@ func emulateSysreg(ac *arch.Context64, iss uint64) bool {
 
 	// DCZID_EL0: op1=3, CRn=0, CRm=0, op2=7 → key=0x3007
 	case 0x3007:
-		val = 0x4 // 64-byte DC ZVA block
+		val = 0x14 // DZP=1 (DC ZVA prohibited), 64-byte block
 
 	// CLIDR_EL1: op1=1, CRn=0, CRm=0, op2=1 → key=0x1001
 	case 0x1001:

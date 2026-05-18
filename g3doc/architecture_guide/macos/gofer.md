@@ -14,7 +14,7 @@ Unix socketpair.
  |                                                       |
  |  Sentry VFS                     In-process Gofer      |
  |  +-------------------+         +-------------------+  |
- |  | gofer.Filesystem  |         | fsgofer.LisafsServer |
+ |  | gofer.Filesystem  |         | lisafs.Server        |
  |  | (lisafs client)   | <-----> | (lisafs server)      |
  |  |                   | socket  |                      |
  |  | Mounted at /      | pair    | Reads/writes host    |
@@ -104,5 +104,8 @@ bypasses lisafs for direct host syscalls. This mode requires `O_PATH`,
 none of which are available on macOS.
 
 On macOS, `directfs_inode.go` is excluded via `//go:build linux` and replaced
-by `directfs_inode_stubs_darwin.go` with panic/ENOTSUP stubs. All filesystem
-operations go through the lisafs RPC path, which is fully portable.
+by `directfs_inode_darwin.go`, which provides a full macOS directfs
+implementation with adaptations for missing Linux syscalls (O_PATH, AT_EMPTY_PATH,
+dup3, statx, fallocate, tee). These are replaced with macOS equivalents:
+fcntl(F_GETPATH)+open for fd reopening, dup+close for dup3, fstat for statx,
+ftruncate for fallocate, and read+write loops for tee/splice.

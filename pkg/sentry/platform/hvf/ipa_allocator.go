@@ -56,6 +56,8 @@ type ipaAllocator struct {
 	freeIPAs []uint64
 	// ipaToHost is the reverse of hostToIPA for O(1) cleanup.
 	ipaToHost map[uint64]uintptr
+	// ipaSize tracks the mapped size of each IPA for correct unmapping.
+	ipaSize map[uint64]uintptr
 	// shadowPages maps IPA → anonymous shadow page pointer.
 	shadowPages map[uint64]unsafe.Pointer
 }
@@ -75,6 +77,7 @@ func newIPAAllocator() *ipaAllocator {
 		nextIPA:     ipaBase,
 		hostToIPA:   make(map[uintptr]uint64),
 		ipaToHost:   make(map[uint64]uintptr),
+		ipaSize:     make(map[uint64]uintptr),
 		refCount:    make(map[uint64]int),
 		shadowPages: make(map[uint64]unsafe.Pointer),
 	}
@@ -123,8 +126,12 @@ func (a *ipaAllocator) mapPageInternal(hostAddr uintptr, size uintptr, shadow bo
 				C.memcpy(anonMem, unsafe.Pointer(hostAddr), C.size_t(size))
 				patchIDRegisterReads(anonMem, size)
 				C.hv_vm_unmap(C.hv_ipa_t(ipa), C.size_t(size))
-				C.hv_vm_map(anonMem, C.hv_ipa_t(ipa), C.size_t(size),
+				ret := C.hv_vm_map(anonMem, C.hv_ipa_t(ipa), C.size_t(size),
 					C.HV_MEMORY_READ|C.HV_MEMORY_WRITE|C.HV_MEMORY_EXEC)
+				if ret != C.HV_SUCCESS {
+					C.free(anonMem)
+					return 0, fmt.Errorf("hv_vm_map shadow upgrade failed: %d", ret)
+				}
 				a.shadowPages[ipa] = anonMem
 			}
 		}
@@ -156,9 +163,8 @@ func (a *ipaAllocator) mapPageInternal(hostAddr uintptr, size uintptr, shadow bo
 	if shadow {
 		// Allocate anonymous memory and copy the page content.
 		var anonMem unsafe.Pointer
-		C.posix_memalign(&anonMem, C.size_t(size), C.size_t(size))
-		if anonMem == nil {
-			return 0, fmt.Errorf("posix_memalign failed for shadow page (size=%d)", size)
+		if ret := C.posix_memalign(&anonMem, C.size_t(size), C.size_t(size)); ret != 0 || anonMem == nil {
+			return 0, fmt.Errorf("posix_memalign failed for shadow page (size=%d, ret=%d)", size, ret)
 		}
 		C.memcpy(anonMem, unsafe.Pointer(hostAddr), C.size_t(size))
 		patchIDRegisterReads(anonMem, size)
@@ -179,6 +185,7 @@ func (a *ipaAllocator) mapPageInternal(hostAddr uintptr, size uintptr, shadow bo
 
 	a.hostToIPA[hostAddr] = ipa
 	a.ipaToHost[ipa] = hostAddr
+	a.ipaSize[ipa] = size
 	a.refCount[ipa] = 1
 	return ipa, nil
 }
@@ -197,20 +204,19 @@ func (a *ipaAllocator) unmapIPA(ipa uint64) {
 	}
 	a.refCount[ipa]--
 	if a.refCount[ipa] <= 0 {
+		size := a.ipaSize[ipa]
 		if h, ok := a.ipaToHost[ipa]; ok {
 			delete(a.hostToIPA, h)
 			delete(a.ipaToHost, ipa)
 		}
 		delete(a.refCount, ipa)
+		delete(a.ipaSize, ipa)
 
 		// Force stage-2 TLB invalidation for this IPA before unmapping.
 		// ARM64 architecture requires break-before-make: removing permissions
 		// forces the kernel to issue TLBI for the affected IPA range.
-		// This ensures all vCPUs see the unmapped page even if they have
-		// stale TLB entries from a previous hv_vcpu_run.
-		C.hv_vm_protect(C.hv_ipa_t(ipa), C.size_t(hvfPageSize), 0)
-
-		C.hv_vm_unmap(C.hv_ipa_t(ipa), C.size_t(hvfPageSize))
+		C.hv_vm_protect(C.hv_ipa_t(ipa), C.size_t(size), 0)
+		C.hv_vm_unmap(C.hv_ipa_t(ipa), C.size_t(size))
 
 		// Free the shadow page if one was allocated.
 		if sp, ok := a.shadowPages[ipa]; ok {

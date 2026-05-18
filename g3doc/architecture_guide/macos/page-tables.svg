@@ -1,62 +1,87 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 250" font-family="Arial, Helvetica, sans-serif" font-size="12">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 310" font-family="Arial, Helvetica, sans-serif" font-size="12">
   <!-- Title -->
-  <text x="260" y="20" text-anchor="middle" font-size="14" font-weight="bold" fill="#333">ARM64 Page Tables (16K Granule)</text>
+  <text x="290" y="20" text-anchor="middle" font-size="14" font-weight="bold" fill="#333">ARM64 Page Tables (4K Granule, 48-bit VA)</text>
+
+  <!-- L0 Table -->
+  <rect x="10" y="40" width="120" height="70" rx="4" fill="#e8d5f5" stroke="#9673a6" stroke-width="1.5"/>
+  <text x="70" y="58" text-anchor="middle" font-weight="bold" fill="#351c75">L0</text>
+  <text x="70" y="74" text-anchor="middle" font-size="10" fill="#674ea7">512 entries</text>
+  <text x="70" y="88" text-anchor="middle" font-size="10" fill="#674ea7">VA[47:39]</text>
+  <text x="70" y="102" text-anchor="middle" font-size="9" fill="#351c75">root per AS</text>
+
+  <line x1="130" y1="75" x2="150" y2="75" stroke="#333" stroke-width="1.5" marker-end="url(#pR)"/>
+
+  <!-- L1 Table -->
+  <rect x="150" y="40" width="120" height="70" rx="4" fill="#cfe2f3" stroke="#6d9eeb" stroke-width="1.5"/>
+  <text x="210" y="58" text-anchor="middle" font-weight="bold" fill="#1155cc">L1</text>
+  <text x="210" y="74" text-anchor="middle" font-size="10" fill="#3c78d8">512 entries</text>
+  <text x="210" y="88" text-anchor="middle" font-size="10" fill="#3c78d8">VA[38:30]</text>
+  <text x="210" y="102" text-anchor="middle" font-size="9" fill="#1155cc">1GB per entry</text>
+
+  <line x1="270" y1="75" x2="290" y2="75" stroke="#333" stroke-width="1.5" marker-end="url(#pR)"/>
 
   <!-- L2 Table -->
-  <rect x="20" y="40" width="220" height="90" rx="4" fill="#cfe2f3" stroke="#6d9eeb" stroke-width="1.5"/>
-  <text x="130" y="60" text-anchor="middle" font-weight="bold" fill="#1155cc">L2 Table (root)</text>
-  <text x="130" y="78" text-anchor="middle" font-size="11" fill="#3c78d8">2048 entries x 8B = 16K</text>
-  <text x="130" y="94" text-anchor="middle" font-size="11" fill="#3c78d8">Each covers 32MB (1 &lt;&lt; 25)</text>
-  <text x="130" y="110" text-anchor="middle" font-size="11" fill="#3c78d8">Points to L3 or invalid</text>
-  <text x="130" y="126" text-anchor="middle" font-size="10" fill="#1155cc">One per address space</text>
+  <rect x="290" y="40" width="120" height="70" rx="4" fill="#d9ead3" stroke="#6aa84f" stroke-width="1.5"/>
+  <text x="350" y="58" text-anchor="middle" font-weight="bold" fill="#274e13">L2</text>
+  <text x="350" y="74" text-anchor="middle" font-size="10" fill="#38761d">512 entries</text>
+  <text x="350" y="88" text-anchor="middle" font-size="10" fill="#38761d">VA[29:21]</text>
+  <text x="350" y="102" text-anchor="middle" font-size="9" fill="#274e13">2MB per entry</text>
 
-  <!-- Arrow L2 -> L3 -->
-  <line x1="240" y1="85" x2="280" y2="85" stroke="#333" stroke-width="1.5" marker-end="url(#pR)"/>
+  <line x1="410" y1="75" x2="430" y2="75" stroke="#333" stroke-width="1.5" marker-end="url(#pR)"/>
 
   <!-- L3 Table -->
-  <rect x="280" y="40" width="220" height="90" rx="4" fill="#d9d2e9" stroke="#8e7cc3" stroke-width="1.5"/>
-  <text x="390" y="60" text-anchor="middle" font-weight="bold" fill="#351c75">L3 Table (leaf)</text>
-  <text x="390" y="78" text-anchor="middle" font-size="11" fill="#674ea7">2048 entries x 8B = 16K</text>
-  <text x="390" y="94" text-anchor="middle" font-size="11" fill="#674ea7">Each maps one 16K page</text>
-  <text x="390" y="110" text-anchor="middle" font-size="11" fill="#674ea7">Allocated on demand</text>
-  <text x="390" y="126" text-anchor="middle" font-size="10" fill="#351c75">Recycled via free list</text>
+  <rect x="430" y="40" width="140" height="70" rx="4" fill="#d9d2e9" stroke="#8e7cc3" stroke-width="1.5"/>
+  <text x="500" y="58" text-anchor="middle" font-weight="bold" fill="#351c75">L3 (leaf)</text>
+  <text x="500" y="74" text-anchor="middle" font-size="10" fill="#674ea7">512 entries</text>
+  <text x="500" y="88" text-anchor="middle" font-size="10" fill="#674ea7">VA[20:12], 4K page</text>
+  <text x="500" y="102" text-anchor="middle" font-size="9" fill="#351c75">on demand, recycled</text>
 
   <!-- L3 Descriptor Detail -->
-  <rect x="20" y="150" width="480" height="85" rx="4" fill="#fce5cd" stroke="#e69138" stroke-width="1"/>
-  <text x="260" y="170" text-anchor="middle" font-weight="bold" fill="#783f04">L3 Page Descriptor</text>
+  <rect x="10" y="130" width="560" height="85" rx="4" fill="#fce5cd" stroke="#e69138" stroke-width="1"/>
+  <text x="290" y="150" text-anchor="middle" font-weight="bold" fill="#783f04">L3 Page Descriptor (64-bit)</text>
 
-  <!-- Descriptor fields as boxes -->
-  <rect x="35" y="180" width="70" height="25" rx="2" fill="#fff2cc" stroke="#f1c232"/>
-  <text x="70" y="197" text-anchor="middle" font-size="10" fill="#7f6000">IPA[51:14]</text>
+  <!-- Descriptor fields -->
+  <rect x="25" y="160" width="70" height="25" rx="2" fill="#fff2cc" stroke="#f1c232"/>
+  <text x="60" y="177" text-anchor="middle" font-size="10" fill="#7f6000">IPA[47:12]</text>
 
-  <rect x="110" y="180" width="35" height="25" rx="2" fill="#d9ead3" stroke="#6aa84f"/>
-  <text x="127" y="197" text-anchor="middle" font-size="10" fill="#274e13">nG</text>
+  <rect x="100" y="160" width="35" height="25" rx="2" fill="#d9ead3" stroke="#6aa84f"/>
+  <text x="117" y="177" text-anchor="middle" font-size="10" fill="#274e13">nG</text>
 
-  <rect x="150" y="180" width="30" height="25" rx="2" fill="#d9ead3" stroke="#6aa84f"/>
-  <text x="165" y="197" text-anchor="middle" font-size="10" fill="#274e13">AF</text>
+  <rect x="140" y="160" width="30" height="25" rx="2" fill="#d9ead3" stroke="#6aa84f"/>
+  <text x="155" y="177" text-anchor="middle" font-size="10" fill="#274e13">AF</text>
 
-  <rect x="185" y="180" width="30" height="25" rx="2" fill="#d9ead3" stroke="#6aa84f"/>
-  <text x="200" y="197" text-anchor="middle" font-size="10" fill="#274e13">SH</text>
+  <rect x="175" y="160" width="30" height="25" rx="2" fill="#d9ead3" stroke="#6aa84f"/>
+  <text x="190" y="177" text-anchor="middle" font-size="10" fill="#274e13">SH</text>
 
-  <rect x="220" y="180" width="40" height="25" rx="2" fill="#d9ead3" stroke="#6aa84f"/>
-  <text x="240" y="197" text-anchor="middle" font-size="10" fill="#274e13">attr</text>
+  <rect x="210" y="160" width="40" height="25" rx="2" fill="#d9ead3" stroke="#6aa84f"/>
+  <text x="230" y="177" text-anchor="middle" font-size="10" fill="#274e13">attr</text>
 
-  <rect x="265" y="180" width="50" height="25" rx="2" fill="#f4cccc" stroke="#cc4125"/>
-  <text x="290" y="197" text-anchor="middle" font-size="10" font-weight="bold" fill="#990000">AP[2]</text>
+  <rect x="255" y="160" width="55" height="25" rx="2" fill="#f4cccc" stroke="#cc4125"/>
+  <text x="282" y="177" text-anchor="middle" font-size="10" font-weight="bold" fill="#990000">AP[2]</text>
 
-  <rect x="320" y="180" width="50" height="25" rx="2" fill="#cfe2f3" stroke="#6d9eeb"/>
-  <text x="345" y="197" text-anchor="middle" font-size="10" fill="#1155cc">table</text>
+  <rect x="315" y="160" width="40" height="25" rx="2" fill="#d9ead3" stroke="#6aa84f"/>
+  <text x="335" y="177" text-anchor="middle" font-size="10" fill="#274e13">AP[1]</text>
 
-  <rect x="375" y="180" width="50" height="25" rx="2" fill="#cfe2f3" stroke="#6d9eeb"/>
-  <text x="400" y="197" text-anchor="middle" font-size="10" fill="#1155cc">valid</text>
+  <rect x="360" y="160" width="50" height="25" rx="2" fill="#cfe2f3" stroke="#6d9eeb"/>
+  <text x="385" y="177" text-anchor="middle" font-size="10" fill="#1155cc">table</text>
+
+  <rect x="415" y="160" width="50" height="25" rx="2" fill="#cfe2f3" stroke="#6d9eeb"/>
+  <text x="440" y="177" text-anchor="middle" font-size="10" fill="#1155cc">valid</text>
 
   <!-- Legend -->
-  <text x="35" y="225" font-size="10" fill="#990000" font-weight="bold">AP[2]=0</text>
-  <text x="85" y="225" font-size="10" fill="#555">read-write</text>
-  <text x="170" y="225" font-size="10" fill="#990000" font-weight="bold">AP[2]=1</text>
-  <text x="220" y="225" font-size="10" fill="#555">read-only (COW)</text>
-  <text x="330" y="225" font-size="10" fill="#274e13" font-weight="bold">nG=1</text>
-  <text x="365" y="225" font-size="10" fill="#555">non-Global (ASID-tagged)</text>
+  <text x="25" y="205" font-size="10" fill="#990000" font-weight="bold">AP[2]=0</text>
+  <text x="75" y="205" font-size="10" fill="#555">read-write</text>
+  <text x="160" y="205" font-size="10" fill="#990000" font-weight="bold">AP[2]=1</text>
+  <text x="210" y="205" font-size="10" fill="#555">read-only (COW)</text>
+  <text x="320" y="205" font-size="10" fill="#274e13" font-weight="bold">nG=1</text>
+  <text x="355" y="205" font-size="10" fill="#555">non-Global (ASID-tagged)</text>
+
+  <!-- 16K granule note -->
+  <rect x="10" y="225" width="560" height="75" rx="4" fill="#f5f5f5" stroke="#ccc" stroke-width="1"/>
+  <text x="20" y="243" font-size="10" font-weight="bold" fill="#333">Granule modes:</text>
+  <text x="20" y="260" font-size="10" fill="#555">Default (--page4k): 4K granule, L0-L3 with 512 entries each, IPA mask=0x0000FFFFFFFFF000</text>
+  <text x="20" y="277" font-size="10" fill="#555">Optional (--page16k): 16K granule, L0(2)-L1(2048)-L2(2048)-L3(2048), IPA mask=0x0000FFFFFFFFC000</text>
+  <text x="20" y="294" font-size="10" fill="#555">Kernel PT (TTBR1): always 16K granule regardless of guest granule mode</text>
 
   <defs>
     <marker id="pR" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><path d="M0,0 L7,2.5 L0,5 Z" fill="#333"/></marker>

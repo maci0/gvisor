@@ -90,9 +90,10 @@ func (vfs *VirtualFilesystem) NewMountNamespace(
 	return vfs.NewMountNamespaceFrom(ctx, creds, fs, root, opts, nsfs), nil
 }
 
+// +stateify savable
 type namespaceDefaultRefs struct {
 	namespaceRefs
-	destroy func(ctx context.Context)
+	destroy func(ctx context.Context) `state:"nosave"`
 }
 
 func (r *namespaceDefaultRefs) DecRef(ctx context.Context) {

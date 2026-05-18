@@ -29,6 +29,9 @@ const (
 	// HugePageSize is the system huge page size.
 	HugePageSize = 1 << HugePageShift
 
+	// GuestPageSize is the guest page size.
+	GuestPageSize = 1 << GuestPageShift
+
 	// CacheLineSize is the size of the cache line.
 	CacheLineSize = 1 << CacheLineShift
 

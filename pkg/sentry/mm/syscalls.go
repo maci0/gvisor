@@ -39,17 +39,24 @@ func (mm *MemoryManager) HandleUserFault(ctx context.Context, addr hostarch.Addr
 		return linuxerr.EFAULT
 	}
 
-	// Don't bother trying existingPMAsLocked; in most cases, if we did have
-	// existing pmas, we wouldn't have faulted.
-
-	// Ensure that we have a usable vma. Here and below, since we are only
-	// asking for a single page, there is no possibility of partial success,
-	// and any error is immediately fatal.
+	// Since we are only asking for a single page, there is no possibility
+	// of partial success, and any error is immediately fatal.
 	mm.mappingMu.RLock()
 	vseg, _, err := mm.getVMAsLocked(ctx, ar, at, false)
 	if err != nil {
-		mm.mappingMu.RUnlock()
-		return err
+		// When GuestPageSize < PageSize, the host-page range may cross
+		// VMA boundaries. Retry with just the faulting guest page.
+		guestAR, ok2 := addr.GuestRoundDown().ToRange(hostarch.GuestPageSize)
+		if !ok2 {
+			mm.mappingMu.RUnlock()
+			return err
+		}
+		vseg, _, err = mm.getVMAsLocked(ctx, guestAR, at, false)
+		if err != nil {
+			mm.mappingMu.RUnlock()
+			return err
+		}
+		ar = guestAR
 	}
 
 	// Ensure that we have a usable pma.
@@ -65,7 +72,6 @@ func (mm *MemoryManager) HandleUserFault(ctx context.Context, addr hostarch.Addr
 	// anymore.
 	mm.activeMu.DowngradeLock()
 
-	// Map the faulted page into the active AddressSpace.
 	err = mm.mapASLocked(ctx, pseg, ar, memmap.PlatformEffectDefault)
 	mm.activeMu.RUnlock()
 	return err
@@ -83,8 +89,8 @@ func (mm *MemoryManager) MMap(ctx context.Context, opts memmap.MMapOpts) (hostar
 	opts.Length = uint64(length)
 
 	if opts.Mappable != nil {
-		// Offset must be aligned.
-		if hostarch.Addr(opts.Offset).RoundDown() != hostarch.Addr(opts.Offset) {
+		// Offset must be guest-page-aligned.
+		if hostarch.Addr(opts.Offset).GuestRoundDown() != hostarch.Addr(opts.Offset) {
 			return 0, linuxerr.EINVAL
 		}
 		// Offset + length must not overflow.
@@ -95,9 +101,7 @@ func (mm *MemoryManager) MMap(ctx context.Context, opts memmap.MMapOpts) (hostar
 		opts.Offset = 0
 	}
 
-	if opts.Addr.RoundDown() != opts.Addr {
-		// MAP_FIXED requires addr to be page-aligned; non-fixed mappings
-		// don't.
+	if opts.Addr.GuestRoundDown() != opts.Addr {
 		if opts.Fixed {
 			return 0, linuxerr.EINVAL
 		}
